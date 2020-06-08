@@ -83,7 +83,7 @@ target/
 celerybeat-schedule
 
 # Testing Data
-model_notebooks/svm_model/DF_genres_hashed.pkl
+
 
 # SageMath parsed files
 *.sage.py
@@ -96,8 +96,11 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-spotipy/spotipy_test/
-data/
+
+
+# Data Files 
+
+kaggle-explore/input/
 
 # Spyder project settings
 .spyderproject
