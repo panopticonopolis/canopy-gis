@@ -101,6 +101,7 @@ venv.bak/
 # Data Files 
 
 kaggle-explore/input/
+tiff-explore/data
 
 # Spyder project settings
 .spyderproject
