@@ -103,6 +103,7 @@ venv.bak/
 kaggle-explore/input/
 tiff-explore/data
 data_collection/data/
+EarthDS-intro/data/
 
 # Spyder project settings
 .spyderproject
@@ -119,3 +120,4 @@ data_collection/data/
 
 
 
+data_collection/landsat_index.pkl

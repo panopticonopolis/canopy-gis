@@ -11,6 +11,9 @@ pyproj = "*"
 numpy = "*"
 matplotlib = "*"
 ipykernel = "*"
+earthpy = "*"
+descartes = "*"
+seaborn = "*"
 
 [requires]
 python_version = "3.7"
