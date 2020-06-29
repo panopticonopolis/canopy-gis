@@ -10,6 +10,7 @@ landsatxplore = "*"
 ipykernel = "*"
 pandas = "*"
 beautifulsoup4 = "*"
+clint = "*"
 
 [requires]
 python_version = "3.7"

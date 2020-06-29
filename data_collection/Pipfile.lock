@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "12096eb4c6279c5feab15173f1378aa4b03d64ff1329d338fbc9b5a555415d4b"
+            "sha256": "507b6275167f68c2eca29507876f96517a05d64b7626d40b0cdcb49523339a45"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -22,6 +22,12 @@
                 "sha256:8b995ffe925347a2138d7ac0fe77155e4311a0ea6d6da4f5128fe4b3cbe5ed71"
             ],
             "markers": "platform_system == 'Darwin'",
+            "version": "==0.1.0"
+        },
+        "args": {
+            "hashes": [
+                "sha256:a785b8d837625e9b61c39108532d95b85274acd679693b71ebb5156848fcf814"
+            ],
             "version": "==0.1.0"
         },
         "backcall": {
@@ -60,6 +66,13 @@
                 "sha256:dacca89f4bfadd5de3d7489b7c8a566eee0d3676333fbb50030263894c38c0dc"
             ],
             "version": "==7.1.2"
+        },
+        "clint": {
+            "hashes": [
+                "sha256:05224c32b1075563d0b16d0015faaf9da43aa214e4a2140e51f08789e7a4c5aa"
+            ],
+            "index": "pypi",
+            "version": "==0.5.1"
         },
         "decorator": {
             "hashes": [
