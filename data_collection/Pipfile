@@ -11,6 +11,8 @@ ipykernel = "*"
 pandas = "*"
 beautifulsoup4 = "*"
 clint = "*"
+sentinelsat = "==0.12"
+sentinelhub = "*"
 
 [requires]
 python_version = "3.7"

@@ -121,3 +121,4 @@ EarthDS-intro/data/
 
 
 data_collection/landsat_index.pkl
+data_collection/env_vars.py
