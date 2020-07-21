@@ -6,13 +6,11 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-landsatxplore = "*"
 ipykernel = "*"
 pandas = "*"
 beautifulsoup4 = "*"
 clint = "*"
-sentinelsat = "==0.12"
-sentinelhub = "*"
+sentinelsat = "*"
 
 [requires]
 python_version = "3.7"

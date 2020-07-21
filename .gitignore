@@ -122,3 +122,4 @@ EarthDS-intro/data/
 
 data_collection/landsat_index.pkl
 data_collection/env_vars.py
+data_collection/S2A_MSIL1C_20200128T090221_N0208_R007_T33NXC_20200128T105959.zip
