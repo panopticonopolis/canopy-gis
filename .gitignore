@@ -104,6 +104,7 @@ kaggle-explore/input/
 tiff-explore/data
 data_collection/data/
 EarthDS-intro/data/
+Resources/test_granule
 
 # Spyder project settings
 .spyderproject
