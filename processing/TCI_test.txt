@@ -1,0 +1,3 @@
+/Volumes/Lacie/zhenyadata/Project_Canopy_Data/Data/Sentinel_Data/TCI/2015/T34MHV_20150912T082736_TCI.jp2
+/Volumes/Lacie/zhenyadata/Project_Canopy_Data/Data/Sentinel_Data/TCI/2015/T34MCV_20150918T084736_TCI.jp2
+/Volumes/Lacie/zhenyadata/Project_Canopy_Data/Data/Sentinel_Data/TCI/2015/T34MFT_20150912T082736_TCI.jp2
