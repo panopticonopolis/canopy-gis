@@ -17,6 +17,7 @@ seaborn = "*"
 rasterstats = "*"
 earthengine-api = "*"
 folium = "*"
+geopandas = "*"
 
 [requires]
 python_version = "3.7"
