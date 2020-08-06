@@ -126,3 +126,8 @@ data_collection/env_vars.py
 data_collection/S2A_MSIL1C_20200128T090221_N0208_R007_T33NXC_20200128T105959.zip
 data_collection/T37RFK_20170714T075611_TCI.jp2
 data_collection/T37RFK_20170714T075611_TCI.jp2.1
+tiff-explore/logging_roads_filter_1.csv
+data_collection/gabon-latest.osm.pbf
+data_collection/osmfilter
+data_collection/osmconvert
+data_collection/OSM/ogr2osm/
