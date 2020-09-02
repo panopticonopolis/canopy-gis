@@ -9,6 +9,8 @@ verify_ssl = true
 ipykernel = "*"
 numpy = "*"
 opencv-python = "*"
+gdal = "*"
+fiona = "*"
 
 [requires]
 python_version = "3.7"
