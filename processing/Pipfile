@@ -11,6 +11,7 @@ numpy = "*"
 opencv-python = "*"
 gdal = "*"
 fiona = "*"
+pygdal = "*"
 
 [requires]
 python_version = "3.7"
