@@ -38,7 +38,7 @@ TEXT TEXT TEXT
 <p id="gdcalert1" ><span style="color: red; font-weight: bold">>>>>>  gd2md-html alert: inline image link here (to images/image1.png). Store image on your image server and adjust path/filename/extension if necessary. </span><br>(<a href="#">Back to top</a>)(<a href="#gdcalert2">Next alert</a>)<br><span style="color: red; font-weight: bold">>>>>> </span></p>
 
 
-![alt_text](images/image1.png "image_tooltip")
+![alt_text]((https://content.screencast.com/users/ZhenyaWarshavsky/folders/Default/media/0fd1cc57-34fe-4de2-8a2c-0d088434f9fe/screenshot.png) "image_tooltip")
 
 
 [HYPERLINK](www.google.com)
