@@ -7,16 +7,7 @@ verify_ssl = true
 
 [packages]
 ipykernel = "*"
-numpy = "*"
-opencv-python = "*"
-fiona = "*"
-shapely = "*"
-rasterio = "*"
-pandas = "*"
-geopandas = "*"
-matplotlib = "*"
-descartes = "*"
-earthpy = "*"
+labelbox = "*"
 
 [requires]
 python_version = "3.7"
