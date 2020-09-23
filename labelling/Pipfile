@@ -8,6 +8,14 @@ verify_ssl = true
 [packages]
 ipykernel = "*"
 labelbox = "*"
+numpy = "*"
+rasterio = "*"
+shapely = "*"
+matplotlib = "*"
+geopandas = "*"
+earthpy = "*"
+ogr = "*"
+gdal = "*"
 
 [requires]
 python_version = "3.7"

@@ -9,7 +9,7 @@ verify_ssl = true
 ipykernel = "*"
 numpy = "*"
 opencv-python = "*"
-fiona = "*"
+fiona = "==1.8.14"
 shapely = "*"
 rasterio = "*"
 pandas = "*"
@@ -17,6 +17,8 @@ geopandas = "*"
 matplotlib = "*"
 descartes = "*"
 earthpy = "*"
+pygdal = "==3.1.2.6"
+gdal = "*"
 
 [requires]
 python_version = "3.7"
