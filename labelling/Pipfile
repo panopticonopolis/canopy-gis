@@ -7,17 +7,14 @@ verify_ssl = true
 
 [packages]
 ipykernel = "*"
+labelbox = "*"
 numpy = "*"
-opencv-python = "*"
-fiona = "==1.8.14"
-shapely = "*"
 rasterio = "*"
-pandas = "*"
-geopandas = "*"
+shapely = "*"
 matplotlib = "*"
-descartes = "*"
+geopandas = "*"
 earthpy = "*"
-pygdal = "==3.1.2.6"
+ogr = "*"
 gdal = "*"
 
 [requires]
