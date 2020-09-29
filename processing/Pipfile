@@ -19,6 +19,7 @@ descartes = "*"
 earthpy = "*"
 pygdal = "==3.1.2.6"
 gdal = "*"
+seaborn = "*"
 
 [requires]
 python_version = "3.7"
