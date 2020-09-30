@@ -15,6 +15,7 @@ shapely = "*"
 geopandas = "*"
 ipykernel = "*"
 gdal = "*"
+ogr = "*"
 
 [requires]
 python_version = "3.7"
