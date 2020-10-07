@@ -96,7 +96,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-**/env_vars*
+**/env_vars.py
 
 
 # Data Files 
