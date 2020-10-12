@@ -16,6 +16,7 @@ sentinelhub = "*"
 geopandas = "*"
 rasterio = "*"
 earthpy = "*"
+descartes = "*"
 
 [requires]
 python_version = "3.7"
