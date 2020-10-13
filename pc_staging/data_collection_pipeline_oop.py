@@ -4,7 +4,7 @@ from sentinelhub import SHConfig
 # Import Area of Interest List
 import pandas as pd
 import json
-#from mgrs import encode,LLtoUTM
+# from mgrs import encode,LLtoUTM
 # Sentinel Hub Tile Look Up / Download
 from sentinelhub import WebFeatureService, BBox, CRS, DataSource, AwsTileRequest
 # Cloud Masking
@@ -47,11 +47,11 @@ class CollectionPipeline:
         self.S3 = S3
         self.windows = windows
         gdal.UseExceptions()
-        self.config = self.shub_connect(shub_instance_id)
-        self.results2 = self.shub_lookup_tiles(bounding_box, tile_list)
-        self.shub_download_tiles(self.results2, bands)
+#         self.config = self.shub_connect(shub_instance_id)
+#         self.results2 = self.shub_lookup_tiles(bounding_box, tile_list)
+#         self.shub_download_tiles(self.results2, bands)
         #print('Apply masks')
-        self.apply_mask_tci_safe_list()
+#         self.apply_mask_tci_safe_list()
         #print('Make Metadata DF')
         self.metadata_df = self.generate_product_detail_df()
         #print(self.metadata_df)
@@ -197,10 +197,11 @@ class CollectionPipeline:
         Generate product details dataframe used as input for ordering products by Cloudy Pixel Percentage,
         No Data Pixel Percentage, or Unclassified Percentage
         '''
-        dirs = os.listdir(self.raw_dir)
+        dir_paths = glob(self.raw_dir + "*/")
 
         meta_data = []
-        for folder in dirs:
+        for path in dir_paths:
+            folder = path.split("/")[-2]
             xml_loc = glob(self.raw_dir + folder + "/*.xml")[0]
             tree = ET.parse(xml_loc)
             directory = [elem.text for elem in tree.iter() if "MASK_FILENAME" in elem.tag][0].split("/")[1]
