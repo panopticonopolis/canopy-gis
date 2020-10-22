@@ -58,13 +58,11 @@ class CollectionPipeline:
         
     def run(self, start_step='download'):
         """
-        Indicate the started step for your data pull:
-        
-        1. 'download'
-        2. 'mask'
-        3. 'sort'
-        4. 'warp'
-        5. 'mosiac'
+        1. download
+        2. mask
+        3. sort
+        4. warp
+        5. mosiac
         """
         step_dict = {
             'download': 1,
