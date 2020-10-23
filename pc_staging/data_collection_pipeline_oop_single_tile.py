@@ -35,7 +35,7 @@ class CollectionPipeline:
     def __init__(self, shub_instance_id, bounding_box, tile_list, search_interval, output_dir,
                  num_layers=10, product_type=DataSource.SENTINEL2_L2A, S3=False, bands=["R10m/TCI"],
                  epsg_warp_format='EPSG:4326', product_ordering='Cloud Cover',
-                 mask_threshold=0, windows=False):
+                 mask_threshold=0, windows=False, chip_size=[100,100]):
         self.shub_instance_id = shub_instance_id
         self.bounding_box = bounding_box
         self.tile_list = tile_list
@@ -49,6 +49,7 @@ class CollectionPipeline:
         self.full_vrt_dir = self.output_dir + 'full_virtual_rasters/'
         self.tile_tif_dir = self.output_dir + 'tile_tifs/'
         self.mosaic_dir = self.output_dir + 'master_raster/'
+        self.chips_dir = self.output_dir + 'chips/'
         self.num_layers = num_layers
         self.product_type = product_type
         self.S3 = S3
@@ -57,6 +58,74 @@ class CollectionPipeline:
         self.product_ordering = product_ordering
         self.mask_threshold = mask_threshold
         self.windows = windows
+        self.chip_size = chip_size
+
+        
+        
+    def run(self, tiles=None):
+
+        if not tiles:
+            tiles = self.tile_list
+            if not tiles: 
+                raise ValueError(
+                    f'Tile list does not contain an array of tile ids')
+    
+        gdal.UseExceptions()
+        self._create_init_dirs()
+        self.download_products()
+
+        for index,tile in enumerate(tiles,1):
+            print(f'Starting single tile pipeline for tile {index} of {len(tiles)}')
+            self.single_tile_process(tile)
+            print(f'Finished single tile GeoTIFF for tile {index} of {len(tiles)}')
+
+        self.main_tiff_process()
+
+
+
+    def download_products(self):
+        print('Connecting to Sentinel Hub')
+        self.config = self.shub_connect(self.shub_instance_id)
+        print('Searching...')
+        self.results2 = self.shub_lookup_tiles(self.bounding_box, self.tile_list)
+        print('Downloading products')
+        self.shub_download_tiles(self.results2, self.bands)
+
+    
+    def single_tile_process(self,tile):
+        print(f'Applying mask to tile {tile}')
+        single_tile_list = glob(self.raw_dir + "/" + 
+                                f'*{tile}*/*/R10m/*.jp2')
+        for raw_image_path in single_tile_list:
+            self._cloud_mask_tci(raw_image_path)
+
+        print('Making metadata dataframe')
+        self.metadata_df = self.generate_product_detail_df(tile,self.product_ordering)
+        print('Ordering products')
+        self.order_masked_tiles()
+        print('Deleting Masked products')
+        self._delete_contents_of_dir(self.masked_dir)
+        print('Warping products')
+        self.convert_rasters(self.epsg_warp_format)
+        print('Deleting Masked Ordered Products')
+        self._delete_contents_of_dir(self.ordered_dir)
+        print('Making virtual rasters')
+        self.make_tile_virtual_raster()
+        print('Making GeoTIFF')
+        self.vrt_to_tif(tile)
+        print('Deleting Warped Ordered Products')
+        self._delete_contents_of_dir(self.warped_dir)
+        print('Deleting Tile Virtual Rasters')
+        self._delete_contents_of_dir(self.temp_vrt_dir)
+
+    def main_tiff_process(self):
+        print("Creating Master VRT for Tile GeoTIFFs")
+        self.make_full_virtual_raster()
+        self.vrt_to_tif()
+        print("Deleting individual Tile GeoTIFFs")
+        self._delete_contents_of_dir(self.tile_tif_dir)
+        print("Chipping Master GeoTIFF")
+        self.chip_master_tif()
 
 
     def _add_trailing_slash(self, path):
@@ -75,7 +144,7 @@ class CollectionPipeline:
         for directory in [self.output_dir, self.raw_dir, self.masked_dir, 
                           self.ordered_dir,self.warped_dir, 
                           self.temp_vrt_dir, self.full_vrt_dir,
-                          self.tile_tif_dir, self.mosaic_dir,
+                          self.tile_tif_dir, self.mosaic_dir, self.chips_dir
                           ]:
             self._create_dir(directory)
 
@@ -89,63 +158,6 @@ class CollectionPipeline:
             for name in dirs:
                     print(os.path.join(root, name))
                     rmtree(os.path.join(root, name))
-        
-        
-    def run(self, tiles=None):
-
-        if not tiles:
-            tiles = self.tile_list
-            if not tiles: 
-                raise ValueError(
-                    f'Tile list does not contain an array of tile ids')
-    
-        gdal.UseExceptions()
-        self._create_init_dirs()
-        
-        print('Connecting to Sentinel Hub')
-        self.config = self.shub_connect(self.shub_instance_id)
-        print('Searching...')
-        self.results2 = self.shub_lookup_tiles(self.bounding_box, self.tile_list)
-        print('Downloading products')
-        self.shub_download_tiles(self.results2, self.bands)
-
-        for index,tile in enumerate(tiles,1):
-            print(f'Starting single tile pipeline for tile {index} of {len(tiles)}')
-            print(f'Applying mask to tile {tile}')
-            single_tile_list = glob(self.raw_dir + "/" + 
-                                    f'*{tile}*/*/R10m/*.jp2')
-            for raw_image_path in single_tile_list:
-                self._cloud_mask_tci(raw_image_path)
-
-            print('Making metadata dataframe')
-            self.metadata_df = self.generate_product_detail_df(tile,self.product_ordering)
-            print('Ordering products')
-            self.order_masked_tiles()
-            print('Deleting Masked products')
-            self._delete_contents_of_dir(self.masked_dir)
-            print('Warping products')
-            self.convert_rasters(self.epsg_warp_format)
-            print('Deleting Masked Ordered Products')
-            self._delete_contents_of_dir(self.ordered_dir)
-            print('Making virtual rasters')
-            self.make_tile_virtual_raster()
-            print('Making GeoTIFF')
-            self.vrt_to_tif(tile)
-            print('Deleting Warped Ordered Products')
-            self._delete_contents_of_dir(self.warped_dir)
-            print('Deleting Tile Virtual Rasters')
-            self._delete_contents_of_dir(self.temp_vrt_dir)
-            print(f'Finished single tile GeoTIFF for tile {index} of {len(tiles)}')
-
-        print("Creating Master VRT for Tile GeoTIFFs")
-        self.make_full_virtual_raster()
-        self.vrt_to_tif()
-        print("Deleting individual Tile GeoTIFFs")
-        self._delete_contents_of_dir(self.tile_tif_dir)
-
-
-            
-
 
 
     def shub_connect(self, shub_instance_id):
@@ -426,21 +438,8 @@ class CollectionPipeline:
         vrt = gdal.BuildVRT(output_file, filenames, resolution='average', resampleAlg='nearest', srcNodata=0)
         
         vrt.FlushCache()
-        
-        # print('Making full raster')
 
-        # # To make the full raster, we combine every layer. Do it in reverse order because (I believe)
-        # # the last items in the list are prioritized.
-
-        # input_files = [vrt_dir + f'Layer{i}.vrt' for i in reversed(range(1, self.num_layers+1))]
-        
-        # output_file = vrt_dir + 'full.vrt'
-
-        # vrt = gdal.BuildVRT(output_file, input_files, resolution='average', resampleAlg='nearest', srcNodata=0)
-
-        # vrt.FlushCache()
-
-        # #print('Finished')
+        print('Finished')
 
 
     def vrt_to_tif(self,tile=None):
@@ -451,6 +450,32 @@ class CollectionPipeline:
             translate = gdal.Translate(self.mosaic_dir + 'full_tif.tif', self.full_vrt_dir + 'full_vrt.vrt', format='GTiff')
 
         translate.FlushCache()
+    
+    def chip_master_tif(self):
+
+        in_path_tiff = self.mosaic_dir + 'full_tif.tif'
+        out_path_dir = self.chips_dir
+
+        tile_size_x = self.chip_size[0]
+        tile_size_y = self.chip_size[1]
+
+        ds = gdal.Open(in_path_tiff)
+        band = ds.GetRasterBand(1)
+        xsize = band.XSize
+        ysize = band.YSize
+
+
+        for i in range(0, xsize, tile_size_x):
+            for j in range(0, ysize, tile_size_y):
+
+                gdal.Translate(out_path_dir + 'full_tif' + '_' + str(i) + "_" + str(j) + ".tif",in_path_tiff, srcWin = [i, j, tile_size_y, tile_size_x],format='GTiff')
+        
+
+
+
+
+
+
 
 
 class LabellingPipeline:
