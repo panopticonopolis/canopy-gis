@@ -15,8 +15,8 @@ import earthpy.mask as em
 import os
 from glob import glob
 import xml.etree.ElementTree as ET
-# Sort / Organize Tiles by Individual Folders
-from shutil import copyfile
+# Sort / Organize Tiles by Individual Folders, All Directory Deletions
+from shutil import copyfile, rmtree
 # Reproject Masked Files 
 import gdal
 from glob import glob
@@ -42,9 +42,12 @@ class CollectionPipeline:
         self.search_time_interval = search_interval
         self.output_dir = self._add_trailing_slash(output_dir)
         self.raw_dir = self.output_dir + 'raw/'
+        self.masked_dir = self.output_dir + 'masked/'
         self.ordered_dir = self.output_dir + 'ordered/'
         self.warped_dir = self.output_dir + 'ordered_warped/'
-        self.vrt_dir = self.output_dir + 'virtual_rasters/'
+        self.temp_vrt_dir = self.output_dir + 'temp_virtual_rasters/'
+        self.full_vrt_dir = self.output_dir + 'full_virtual_rasters/'
+        self.tile_tif_dir = self.output_dir + 'tile_tifs/'
         self.mosaic_dir = self.output_dir + 'master_raster/'
         self.num_layers = num_layers
         self.product_type = product_type
@@ -54,57 +57,8 @@ class CollectionPipeline:
         self.product_ordering = product_ordering
         self.mask_threshold = mask_threshold
         self.windows = windows
-        
-        
-    def run(self, start_step='download'):
-        """
-        1. download
-        2. mask
-        3. sort
-        4. warp
-        5. mosiac
-        """
-        step_dict = {
-            'download': 1,
-            'mask': 2,
-            'sort': 3,
-            'warp': 4,
-            'mosaic': 5
-        }
-        if start_step.lower() not in step_dict.keys():
-            raise ValueError(f'Start Step must be one of the following: download; mask; sort; warp; mosaic')
-        else:
-            start = step_dict[start_step.lower()]
-        gdal.UseExceptions()
-        self._create_init_dirs()
-        if start <= 1:
-            print('Connecting to Sentinel Hub')
-            self.config = self.shub_connect(self.shub_instance_id)
-            print('Searching...')
-            self.results2 = self.shub_lookup_tiles(self.bounding_box, self.tile_list)
-            print('Downloading products')
-            self.shub_download_tiles(self.results2, self.bands)
-        if start <= 2:
-            print('Applying masks')
-            self.apply_mask_tci_safe_list()
-        if start <= 3:
-            print('Making metadata dataframe')
-            self.metadata_df = self.generate_product_detail_df(self.product_ordering)
-            #print(self.metadata_df)
-            print('Ordering products')
-            self.order_masked_tiles()
-        if start <= 4:
-            print('Warping products')
-            self.convert_rasters(self.epsg_warp_format)
-        if start <= 5:
-            print('Making virtual rasters')
-            self.make_full_virtual_raster()
-            print('Making GeoTIFF')
-            self.vrt_to_tif()
-            print('Finished')
-            return self.metadata_df
 
-    
+
     def _add_trailing_slash(self, path):
         if path[-1] != '/':
             path += '/'
@@ -118,9 +72,80 @@ class CollectionPipeline:
 
 
     def _create_init_dirs(self):
-        for directory in [self.output_dir, self.raw_dir, self.ordered_dir,
-                          self.warped_dir, self.vrt_dir, self.mosaic_dir]:
+        for directory in [self.output_dir, self.raw_dir, self.masked_dir, 
+                          self.ordered_dir,self.warped_dir, 
+                          self.temp_vrt_dir, self.full_vrt_dir,
+                          self.tile_tif_dir, self.mosaic_dir,
+                          ]:
             self._create_dir(directory)
+
+    def _delete_contents_of_dir(self,input_dir):
+
+        for root, dirs, files in os.walk(input_dir):
+       
+            for name in files:
+                    print(os.path.join(root, name)) 
+                    os.remove(os.path.join(root, name))
+            for name in dirs:
+                    print(os.path.join(root, name))
+                    rmtree(os.path.join(root, name))
+        
+        
+    def run(self, tiles=None):
+
+        if not tiles:
+            tiles = self.tile_list
+            if not tiles: 
+                raise ValueError(
+                    f'Tile list does not contain an array of tile ids')
+    
+        gdal.UseExceptions()
+        self._create_init_dirs()
+        
+        print('Connecting to Sentinel Hub')
+        self.config = self.shub_connect(self.shub_instance_id)
+        print('Searching...')
+        self.results2 = self.shub_lookup_tiles(self.bounding_box, self.tile_list)
+        print('Downloading products')
+        self.shub_download_tiles(self.results2, self.bands)
+
+        for index,tile in enumerate(tiles,1):
+            print(f'Starting single tile pipeline for tile {index} of {len(tiles)}')
+            print(f'Applying mask to tile {tile}')
+            single_tile_list = glob(self.raw_dir + "/" + 
+                                    f'*{tile}*/*/R10m/*.jp2')
+            for raw_image_path in single_tile_list:
+                self._cloud_mask_tci(raw_image_path)
+
+            print('Making metadata dataframe')
+            self.metadata_df = self.generate_product_detail_df(tile,self.product_ordering)
+            print('Ordering products')
+            self.order_masked_tiles()
+            print('Deleting Masked products')
+            self._delete_contents_of_dir(self.masked_dir)
+            print('Warping products')
+            self.convert_rasters(self.epsg_warp_format)
+            print('Deleting Masked Ordered Products')
+            self._delete_contents_of_dir(self.ordered_dir)
+            print('Making virtual rasters')
+            self.make_tile_virtual_raster()
+            print('Making GeoTIFF')
+            self.vrt_to_tif(tile)
+            print('Deleting Warped Ordered Products')
+            self._delete_contents_of_dir(self.warped_dir)
+            print('Deleting Tile Virtual Rasters')
+            self._delete_contents_of_dir(self.temp_vrt_dir)
+            print(f'Finished single tile GeoTIFF for tile {index} of {len(tiles)}')
+
+        print("Creating Master VRT for Tile GeoTIFFs")
+        self.make_full_virtual_raster()
+        self.vrt_to_tif()
+        print("Deleting individual Tile GeoTIFFs")
+        self._delete_contents_of_dir(self.tile_tif_dir)
+
+
+            
+
 
 
     def shub_connect(self, shub_instance_id):
@@ -182,35 +207,28 @@ class CollectionPipeline:
             request.save_data(redownload=True)
 
 
-    def _cloud_mask_tci(self, prod_dir):
+    def _cloud_mask_tci(self, raw_image_path):
         '''
-        prod refers product directory 
         '''
-        #print(f'Prod Dir: {prod_dir}')
+        prod_dir = "/".join(raw_image_path.split("/")[:-3])
         prod_dir = self._add_trailing_slash(prod_dir)
-        #print(f'Prod Dir after adding slash: {prod_dir}')
         msk_file_path = glob(prod_dir + "QI_DATA/MSK_CLDPRB_20m.jp2")[0]
-
-        smallest_len = np.inf
-        for tci_file_candidate in glob(prod_dir + "IMG_DATA/R10m/*.jp2"):
-            if len(tci_file_candidate) <= smallest_len:
-                tci_file_path = tci_file_candidate
-                smallest_len = len(tci_file_candidate)
-
-        print(f'Applying mask to file {tci_file_path}')
-
-        if self.windows:
-            tci_filename = tci_file_path.split('\\')[-1]
-        else:
-            tci_filename = tci_file_path.split("/")[-1]
-        output_tci_file_path = prod_dir + "IMG_DATA/R10m/" + "processed_" + tci_filename 
-
+        print(msk_file_path)
+        
+        print(f'Applying mask to file {raw_image_path}')
+        
         nodatavalue = int(0)
-
-        with rio.open(tci_file_path) as sen_TCI_src:
+               
+        tci_filename = raw_image_path.split("/")[-1]
+        
+        output_tci_file_path = self.masked_dir + "/" + "processed_" + tci_filename
+        print(output_tci_file_path)
+        
+        
+        with rio.open(raw_image_path) as sen_TCI_src:
             sen_TCI = sen_TCI_src.read(masked=True)
             sen_TCI_meta = sen_TCI_src.meta
-
+        
         with rio.open(msk_file_path) as sen_mask_src:
             sen_mask_pre = sen_mask_src.read(1)
             sen_mask = np.repeat(np.repeat(sen_mask_pre,2,axis=0),2,axis=1)
@@ -232,6 +250,7 @@ class CollectionPipeline:
             outf.write(sen_TCI_cl_free_processed)
 
 
+
     def apply_mask_tci_safe_list(self):
         '''
         products_dir refers to parent directory containing multiple products
@@ -246,12 +265,13 @@ class CollectionPipeline:
         #print(f"Applied masks to {len(dir_list)} products")
 
 
-    def generate_product_detail_df(self, sort_by):
+    def generate_product_detail_df(self,tile_id, sort_by):
         '''
         Generate product details dataframe used as input for ordering products by Cloudy Pixel Percentage,
         No Data Pixel Percentage, or Unclassified Percentage
         '''
         dir_paths = glob(self.raw_dir + "*/")
+        dir_paths = [i for i in dir_paths if tile_id in i]
 
         meta_data = []
         for path in dir_paths:
@@ -263,15 +283,17 @@ class CollectionPipeline:
             tree = ET.parse(xml_loc)
             directory = [elem.text for elem in tree.iter() if "MASK_FILENAME" in elem.tag][0].split("/")[1]
             tile_id = directory.split("_")[1]
-            filepath_partial = self.raw_dir + directory + "/IMG_DATA" + "/R10m"
-            filepath = glob(filepath_partial + "/processed*.jp2")[0]
+            filepath_partial = self.raw_dir + "/" + directory + "/IMG_DATA" + "/R10m"
+            filepath_origin = glob(filepath_partial + f"/*.jp2")[0]
+            filename = filepath_origin.split("/")[-1]
+            filepath_output = (self.masked_dir + "processed_" + filename)
             if self.windows:
-                filename = filepath.split('\\')[-1]
+                filename = filepath_output.split('\\')[-1]
             else:
-                filename = filepath.split("/")[-1]
+                filename = filepath_output.split("/")[-1]
             cloud_cover,no_data,unclassified = [float(elem.text) for elem in tree.iter() if "CLOUDY_PIXEL_PERCENTAGE" in elem.tag 
                     or "NODATA_PIXEL_PERCENTAGE" in elem.tag or "UNCLASSIFIED_PERCENTAGE" in elem.tag]
-            meta_data.append([directory,tile_id,cloud_cover,no_data,unclassified,filename,filepath])
+            meta_data.append([directory,tile_id,cloud_cover,no_data,unclassified,filename,filepath_output])
         df = pd.DataFrame(meta_data,columns=["Directory","Tile_Id","Cloud Cover","No Data Percentage","Unclassified Percentage","Filename","Filepath"])
         if sort_by == 'Cloud Cover':
             sort_by_2 = 'Unclassified Percentage'
@@ -350,22 +372,25 @@ class CollectionPipeline:
         #print('Finished')
 
 
-    def make_full_virtual_raster(self):
+    def make_tile_virtual_raster(self):
         """Combines the rasters in the src_dir into a single virtual raster
         with proper prioritization. This is saved into the dest_dir.
         Make sure the num_layers variable is the same as the number of tile layers
         in your src_dir."""
         
         src_dir = self.warped_dir
-        vrt_dir = self.vrt_dir
+        vrt_dir = self.temp_vrt_dir
         
+                
         for layer in range(1, self.num_layers+1):
             print('Making Layer', layer)
             
             # Get the filenames from the layer in question
             filenames = glob(src_dir + f'{layer}/*.jp2', recursive=True)
+            print(filenames)
             
             output_file = vrt_dir + f'Layer{layer}.vrt'
+            print(output_file)
         
             vrt = gdal.BuildVRT(output_file, filenames, resolution='average', resampleAlg='nearest', srcNodata=0)
         
@@ -386,10 +411,45 @@ class CollectionPipeline:
 
         #print('Finished')
 
+    def make_full_virtual_raster(self):
+        """Combines the individual tile rasters in the master_raster directory"""
+        
+        src_dir = self.tile_tif_dir
+        vrt_dir = self.full_vrt_dir
 
-    def vrt_to_tif(self):
+        filenames = glob(src_dir + "/*")
+        print(filenames)
+            
+        output_file = vrt_dir + 'full_vrt.vrt'
+        print(output_file)
+        
+        vrt = gdal.BuildVRT(output_file, filenames, resolution='average', resampleAlg='nearest', srcNodata=0)
+        
+        vrt.FlushCache()
+        
+        # print('Making full raster')
 
-        translate = gdal.Translate(self.mosaic_dir + 'full_tif.tif', self.vrt_dir + 'full.vrt', format='GTiff')
+        # # To make the full raster, we combine every layer. Do it in reverse order because (I believe)
+        # # the last items in the list are prioritized.
+
+        # input_files = [vrt_dir + f'Layer{i}.vrt' for i in reversed(range(1, self.num_layers+1))]
+        
+        # output_file = vrt_dir + 'full.vrt'
+
+        # vrt = gdal.BuildVRT(output_file, input_files, resolution='average', resampleAlg='nearest', srcNodata=0)
+
+        # vrt.FlushCache()
+
+        # #print('Finished')
+
+
+    def vrt_to_tif(self,tile=None):
+
+        if tile:
+            translate = gdal.Translate(self.tile_tif_dir + f'T{tile}_full_tif.tif', self.temp_vrt_dir + 'full.vrt', format='GTiff')
+        if not tile:
+            translate = gdal.Translate(self.mosaic_dir + 'full_tif.tif', self.full_vrt_dir + 'full_vrt.vrt', format='GTiff')
+
         translate.FlushCache()
 
 
@@ -595,3 +655,9 @@ class LabellingPipeline:
                 im = Image.open(tif_path)
                 im.thumbnail(im.size)
                 im.save(out_dir_child + base_filename + ".jpg", "JPEG", quality=100)
+
+
+
+if __name__ == "__main__":
+    cpipe = CollectionPipeline(shub_instance_id="dc0df77a-165f-4d52-b932-546f85d68353",bounding_box = (8.42823, -3.373256, 25.688438, 5.845887),search_interval = ('2019-01-01', '2020-12-31'),tile_list = ['33NTE','33MVV'],output_dir="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/OOP_TEST_SINGLE_TILE/",num_layers=2)
+    cpipe.run()

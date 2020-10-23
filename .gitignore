@@ -132,3 +132,4 @@ data_collection/gabon-latest.osm.pbf
 data_collection/osmfilter
 data_collection/osmconvert
 data_collection/OSM/ogr2osm/
+pc_staging/.vscode/settings.json
