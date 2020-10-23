@@ -62,7 +62,7 @@ class CollectionPipeline:
 
         
         
-    def run(self, tiles=None):
+    def run(self, tiles=None, download=True):
 
         if not tiles:
             tiles = self.tile_list
@@ -71,8 +71,9 @@ class CollectionPipeline:
                     f'Tile list does not contain an array of tile ids')
     
         gdal.UseExceptions()
-        self._create_init_dirs()
-        self.download_products()
+        if download:
+            self._create_init_dirs()
+            self.download_products()
 
         for index,tile in enumerate(tiles,1):
             print(f'Starting single tile pipeline for tile {index} of {len(tiles)}')
@@ -96,27 +97,31 @@ class CollectionPipeline:
         print(f'Applying mask to tile {tile}')
         single_tile_list = glob(self.raw_dir + "/" + 
                                 f'*{tile}*/*/R10m/*.jp2')
-        for raw_image_path in single_tile_list:
-            self._cloud_mask_tci(raw_image_path)
+        print('Tile list:', single_tile_list)
+        if len(single_tile_list) == 0:
+            print('No tiles of this ID were downloaded')
+        else:
+            for raw_image_path in single_tile_list:
+                self._cloud_mask_tci(raw_image_path)
 
-        print('Making metadata dataframe')
-        self.metadata_df = self.generate_product_detail_df(tile,self.product_ordering)
-        print('Ordering products')
-        self.order_masked_tiles()
-        print('Deleting Masked products')
-        self._delete_contents_of_dir(self.masked_dir)
-        print('Warping products')
-        self.convert_rasters(self.epsg_warp_format)
-        print('Deleting Masked Ordered Products')
-        self._delete_contents_of_dir(self.ordered_dir)
-        print('Making virtual rasters')
-        self.make_tile_virtual_raster()
-        print('Making GeoTIFF')
-        self.vrt_to_tif(tile)
-        print('Deleting Warped Ordered Products')
-        self._delete_contents_of_dir(self.warped_dir)
-        print('Deleting Tile Virtual Rasters')
-        self._delete_contents_of_dir(self.temp_vrt_dir)
+            print('Making metadata dataframe')
+            self.metadata_df = self.generate_product_detail_df(tile,self.product_ordering)
+            print('Ordering products')
+            self.order_masked_tiles()
+            print('Deleting Masked products')
+            self._delete_contents_of_dir(self.masked_dir)
+            print('Warping products')
+            self.convert_rasters(self.epsg_warp_format)
+            print('Deleting Masked Ordered Products')
+            self._delete_contents_of_dir(self.ordered_dir)
+            print('Making virtual rasters')
+            self.make_tile_virtual_raster()
+            print('Making GeoTIFF')
+            self.vrt_to_tif(tile)
+            print('Deleting Warped Ordered Products')
+            self._delete_contents_of_dir(self.warped_dir)
+            print('Deleting Tile Virtual Rasters')
+            self._delete_contents_of_dir(self.temp_vrt_dir)
 
     def main_tiff_process(self):
         print("Creating Master VRT for Tile GeoTIFFs")
@@ -191,6 +196,12 @@ class CollectionPipeline:
         results = wfs_iterator.get_tiles()
         df = pd.DataFrame(results, columns=['Tilename','Date','AmazonID'])
         df_tiles_of_interest = df[df["Tilename"].isin(tile_list)]
+        undownloaded_tiles = []
+        for tile in tile_list:
+            if tile not in df_tiles_of_interest['Tilename'].unique():
+                undownloaded_tiles.append(tile)
+        if len(undownloaded_tiles) > 0:
+            print('The following tiles were not downloaded:', undownloaded_tiles)
         df2 = df_tiles_of_interest.groupby('Tilename').head(self.num_layers)
         results2 = list(df2.itertuples(index=False,name=None))
         return results2
@@ -222,7 +233,10 @@ class CollectionPipeline:
     def _cloud_mask_tci(self, raw_image_path):
         '''
         '''
-        prod_dir = "/".join(raw_image_path.split("/")[:-3])
+        if self.windows:
+            prod_dir = "/".join(raw_image_path.split("\\")[:-3])
+        else:
+            prod_dir = "/".join(raw_image_path.split("/")[:-3])
         prod_dir = self._add_trailing_slash(prod_dir)
         msk_file_path = glob(prod_dir + "QI_DATA/MSK_CLDPRB_20m.jp2")[0]
         print(msk_file_path)
@@ -231,7 +245,10 @@ class CollectionPipeline:
         
         nodatavalue = int(0)
                
-        tci_filename = raw_image_path.split("/")[-1]
+        if self.windows:
+            tci_filename = raw_image_path.split('\\')[-1]
+        else:
+            tci_filename = raw_image_path.split("/")[-1]
         
         output_tci_file_path = self.masked_dir + "/" + "processed_" + tci_filename
         print(output_tci_file_path)
@@ -295,14 +312,15 @@ class CollectionPipeline:
             tree = ET.parse(xml_loc)
             directory = [elem.text for elem in tree.iter() if "MASK_FILENAME" in elem.tag][0].split("/")[1]
             tile_id = directory.split("_")[1]
-            filepath_partial = self.raw_dir + "/" + directory + "/IMG_DATA" + "/R10m"
+            filepath_partial = self.raw_dir + directory + "/IMG_DATA" + "/R10m"
             filepath_origin = glob(filepath_partial + f"/*.jp2")[0]
-            filename = filepath_origin.split("/")[-1]
-            filepath_output = (self.masked_dir + "processed_" + filename)
+            print('Filepath Origin:', filepath_origin)
             if self.windows:
-                filename = filepath_output.split('\\')[-1]
+                filename = filepath_origin.split('\\')[-1]
             else:
-                filename = filepath_output.split("/")[-1]
+                filename = filepath_origin.split("/")[-1]
+            filepath_output = (self.masked_dir + "processed_" + filename)
+            filename = filepath_output.split("/")[-1]
             cloud_cover,no_data,unclassified = [float(elem.text) for elem in tree.iter() if "CLOUDY_PIXEL_PERCENTAGE" in elem.tag 
                     or "NODATA_PIXEL_PERCENTAGE" in elem.tag or "UNCLASSIFIED_PERCENTAGE" in elem.tag]
             meta_data.append([directory,tile_id,cloud_cover,no_data,unclassified,filename,filepath_output])
