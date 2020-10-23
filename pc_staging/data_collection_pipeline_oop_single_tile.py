@@ -16,7 +16,7 @@ import os
 from glob import glob
 import xml.etree.ElementTree as ET
 # Sort / Organize Tiles by Individual Folders, All Directory Deletions
-from shutil import copyfile, rmtree
+from shutil import copyfile, copytree, rmtree
 # Reproject Masked Files 
 import gdal
 from glob import glob
@@ -35,7 +35,8 @@ class CollectionPipeline:
     def __init__(self, shub_instance_id, bounding_box, tile_list, search_interval, output_dir,
                  num_layers=10, product_type=DataSource.SENTINEL2_L2A, S3=False, bands=["R10m/TCI"],
                  epsg_warp_format='EPSG:4326', product_ordering='Cloud Cover',
-                 mask_threshold=0, windows=False, chip_size=[100,100]):
+                 mask_threshold=0, windows=False, chip_size=[100,100],
+                 raw_dir_s3_dest=None, chips_dir_s3_dest=None):
         self.shub_instance_id = shub_instance_id
         self.bounding_box = bounding_box
         self.tile_list = tile_list
@@ -59,28 +60,65 @@ class CollectionPipeline:
         self.mask_threshold = mask_threshold
         self.windows = windows
         self.chip_size = chip_size
+        self.raw_dir_s3_dest = raw_dir_s3_dest
+        self.chips_dir_s3_dest = chips_dir_s3_dest
 
         
-        
-    def run(self, tiles=None, download=True):
+    def run(self, tiles=None, start_step='download', end_step='upload'):
+        '''
+        Steps:
+        1. Download
+        2. Process
+        3. Chip
+        4. Upload
+        '''
+        step_dict = {
+            'download': 1,
+            'process': 2,
+            'chip': 3,
+            'upload': 4
+        }
 
         if not tiles:
             tiles = self.tile_list
             if not tiles: 
                 raise ValueError(
                     f'Tile list does not contain an array of tile ids')
+
+        if start_step.lower() not in step_dict.keys():
+            raise ValueError(f'''Start Step {start_step} invalid.
+                             Must be one of the following: download; process; chip; upload''')
+        else:
+            start = step_dict[start_step.lower()]
+        if end_step.lower() not in step_dict.keys():
+            raise ValueError(f'''End Step {end_step} invalid.
+                             Must be one of the following: download; process; chip; upload''')
+        else:
+            end = step_dict[end_step.lower()]
+
+        if start > end:
+            raise ValueError('Must end at a later step than when you start')
     
         gdal.UseExceptions()
-        if download:
+        if start <= 1 and end >= 1:
             self._create_init_dirs()
             self.download_products()
 
-        for index,tile in enumerate(tiles,1):
-            print(f'Starting single tile pipeline for tile {index} of {len(tiles)}')
-            self.single_tile_process(tile)
-            print(f'Finished single tile GeoTIFF for tile {index} of {len(tiles)}')
+        if start <= 2 and end >= 2:
+            for index,tile in enumerate(tiles,1):
+                print(f'Starting single tile pipeline for tile {index} of {len(tiles)}')
+                self.single_tile_process(tile)
+                print(f'Finished single tile GeoTIFF for tile {index} of {len(tiles)}')
 
-        self.main_tiff_process()
+        if start <= 3 and end >= 3:
+            self.main_tiff_process()
+
+        if start <= 4 and end >= 4:
+            if self.raw_dir_s3_dest is not None:
+                copytree(self.raw_dir, self.chips_dir_s3_dest)
+
+            if self.chips_dir_s3_dest is not None:
+                copytree(self.chips_dir, self.chips_dir_s3_dest)
 
 
 
