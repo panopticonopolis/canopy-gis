@@ -16,7 +16,7 @@ import os
 from glob import glob
 import xml.etree.ElementTree as ET
 # Sort / Organize Tiles by Individual Folders, All Directory Deletions
-from shutil import copyfile, copytree, rmtree
+from shutil import copyfile, rmtree, move, copy
 # Reproject Masked Files 
 import gdal
 from glob import glob
@@ -98,10 +98,10 @@ class CollectionPipeline:
 
         if start > end:
             raise ValueError('Must end at a later step than when you start')
-    
+
+        self._create_init_dirs()
         gdal.UseExceptions()
         if start <= 1 and end >= 1:
-            self._create_init_dirs()
             self.download_products()
 
         if start <= 2 and end >= 2:
@@ -115,10 +115,10 @@ class CollectionPipeline:
 
         if start <= 4 and end >= 4:
             if self.raw_dir_s3_dest is not None:
-                copytree(self.raw_dir, self.chips_dir_s3_dest)
+                self._copy_to_existing_directory(self.raw_dir, self.raw_dir_s3_dest)
 
             if self.chips_dir_s3_dest is not None:
-                copytree(self.chips_dir, self.chips_dir_s3_dest)
+                self._copy_to_existing_directory(self.chips_dir, self.chips_dir_s3_dest)
 
 
 
@@ -201,6 +201,25 @@ class CollectionPipeline:
             for name in dirs:
                     print(os.path.join(root, name))
                     rmtree(os.path.join(root, name))
+
+
+    def _copy_to_existing_directory(self,src, dest, ignore=None):
+
+        if os.path.isdir(src):
+            if not os.path.isdir(dest):
+                os.makedirs(dest)
+            files = os.listdir(src)
+            if ignore is not None:
+                ignored = ignore(src, files)
+            else:
+                ignored = set()
+            for f in files:
+                if f not in ignored:
+                    self._copy_to_existing_directory(os.path.join(src, f), 
+                                        os.path.join(dest, f), 
+                                        ignore)
+        else:
+            copyfile(src, dest)
 
 
     def shub_connect(self, shub_instance_id):
@@ -525,11 +544,6 @@ class CollectionPipeline:
             for j in range(0, ysize, tile_size_y):
 
                 gdal.Translate(out_path_dir + 'full_tif' + '_' + str(i) + "_" + str(j) + ".tif",in_path_tiff, srcWin = [i, j, tile_size_y, tile_size_x],format='GTiff')
-        
-
-
-
-
 
 
 
@@ -740,5 +754,5 @@ class LabellingPipeline:
 
 
 if __name__ == "__main__":
-    cpipe = CollectionPipeline(shub_instance_id="dc0df77a-165f-4d52-b932-546f85d68353",bounding_box = (8.42823, -3.373256, 25.688438, 5.845887),search_interval = ('2019-01-01', '2020-12-31'),tile_list = ['33NTE','33MVV'],output_dir="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/OOP_TEST_SINGLE_TILE/",num_layers=2)
-    cpipe.run()
+    cpipe = CollectionPipeline(shub_instance_id="dc0df77a-165f-4d52-b932-546f85d68353",bounding_box = (8.42823, -3.373256, 25.688438, 5.845887),search_interval = ('2019-01-01', '2020-12-31'),tile_list = ['33MVV','33NTE'],output_dir="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/OOP_TEST_SINGLE_TILE",num_layers=2,raw_dir_s3_dest="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/s3_mock/raw",chips_dir_s3_dest="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/s3_mock/chips")
+    cpipe.run(start_step="upload",end_step="upload")
