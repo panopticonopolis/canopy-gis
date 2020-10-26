@@ -753,6 +753,6 @@ class LabellingPipeline:
 
 
 
-if __name__ == "__main__":
-    cpipe = CollectionPipeline(shub_instance_id="dc0df77a-165f-4d52-b932-546f85d68353",bounding_box = (8.42823, -3.373256, 25.688438, 5.845887),search_interval = ('2019-01-01', '2020-12-31'),tile_list = ['33MVV','33NTE'],output_dir="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/OOP_TEST_SINGLE_TILE",num_layers=2,raw_dir_s3_dest="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/s3_mock/raw",chips_dir_s3_dest="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/s3_mock/chips")
-    cpipe.run(start_step="upload",end_step="upload")
+# if __name__ == "__main__":
+#     cpipe = CollectionPipeline(shub_instance_id="dc0df77a-165f-4d52-b932-546f85d68353",bounding_box = (8.42823, -3.373256, 25.688438, 5.845887),search_interval = ('2019-01-01', '2020-12-31'),tile_list = ['33MVV','33NTE'],output_dir="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/OOP_TEST_SINGLE_TILE",num_layers=2,raw_dir_s3_dest="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/s3_mock/raw",chips_dir_s3_dest="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/s3_mock/chips")
+#     cpipe.run(start_step="upload",end_step="upload")
