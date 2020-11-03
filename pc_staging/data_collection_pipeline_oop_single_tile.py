@@ -33,7 +33,7 @@ from PIL import Image
 
 class CollectionPipeline:
     def __init__(self, shub_instance_id, bounding_box, tile_list, search_interval, output_dir,
-                 num_layers=10, product_type=DataSource.SENTINEL2_L2A, S3=False, bands=["R10m/TCI"],
+                 num_layers=10, product_type=DataSource.SENTINEL2_L2A, S3=False, bands=[],
                  epsg_warp_format='EPSG:4326', product_ordering='Cloud Cover',
                  mask_threshold=0, windows=False, chip_size=[100,100],
                  raw_dir_s3_dest=None, chips_dir_s3_dest=None):
@@ -276,8 +276,7 @@ class CollectionPipeline:
             #Download SAFE Files
             request = AwsTileRequest(
                 tile=tile_name,
-                time=time,
-                bands=bands, 
+                time=time, 
                 aws_index=aws_index,
                 data_folder=self.raw_dir,
                 data_source=self.product_type,
@@ -753,6 +752,9 @@ class LabellingPipeline:
 
 
 
-# if __name__ == "__main__":
-#     cpipe = CollectionPipeline(shub_instance_id="dc0df77a-165f-4d52-b932-546f85d68353",bounding_box = (8.42823, -3.373256, 25.688438, 5.845887),search_interval = ('2019-01-01', '2020-12-31'),tile_list = ['33MVV','33NTE'],output_dir="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/OOP_TEST_SINGLE_TILE",num_layers=2,raw_dir_s3_dest="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/s3_mock/raw",chips_dir_s3_dest="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/s3_mock/chips")
-#     cpipe.run(start_step="upload",end_step="upload")
+if __name__ == "__main__":
+    LP = LabellingPipeline("/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/Polygon_List/polygons_101320.csv")
+    bounding_box, tile_list = LP.import_aois()
+    print(tile_list[7])
+    cpipe = CollectionPipeline(shub_instance_id="dc0df77a-165f-4d52-b932-546f85d68353",bounding_box = (8.42823, -3.373256, 25.688438, 5.845887),search_interval = ('2019-01-01', '2020-12-31'),tile_list = [tile_list[7]],output_dir="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DL_temp",num_layers=10,raw_dir_s3_dest="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/s3_mock/raw",chips_dir_s3_dest="/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/Labelled/Tiles_v3/DELETE_TEST/s3_mock/chips")
+    cpipe.run(start_step="download",end_step="download")
