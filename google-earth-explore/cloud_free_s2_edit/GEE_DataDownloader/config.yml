@@ -1,0 +1,75 @@
+---
+
+downloadDirectory: "/sentinel/"
+export_to: bucket
+export_dest: "sentinel2"
+log_file: "gee_download_log.pkl"
+max_tasks: 5
+max_retry: 1
+task_timeout: 14400
+
+sensors:
+  - name: "COPERNICUS/S2"
+    prefix: "S2_CloudFree"
+    type: "opt"
+    bands: ['B1','B2','B3','B4','B5','B6','B7','B8','B8A', 'B9','B10', 'B11','B12']
+    filters_after:
+      - CLOUDY_PERCENTAGE: {'lte': 10}
+
+  - name: "COPERNICUS/S2"
+    type: "opt"
+    prefix: "S2_20_60_Cloud"
+    bands: ['B1','B2','B3','B4','B5','B6','B7','B8','B8A', 'B9','B10', 'B11','B12']
+    filters_after:
+      - CLOUDY_PERCENTAGE: {'gte': 20}
+      - CLOUDY_PERCENTAGE: {'lte': 60}
+
+  - name: "COPERNICUS/S1_GRD"
+    type: "sar"
+    prefix: "S1"
+    bands: ['VV', 'VH']
+    filters_before:
+      - instrumentMode: {'eq': 'IW'}
+      - transmitterReceiverPolarisation: {'listContains': 'VV'}
+      - transmitterReceiverPolarisation: {'listContains': 'VH'}
+
+data_list:
+  - name: ['summer', '1886']
+    start_date: '2017-06-01'
+    end_date: '2017-08-31'
+    geometry: point
+    size: 20000
+    resolution: 10
+    sort_by: 'name'
+    features_src: "ft:19Vexm10pJcAZ8tTVbl4j0HA8w2muyPPz6-cyvdxI"
+    sensors: [0,1,2]
+
+  - name: ['winter','2017']
+    start_date: '2016-12-01'
+    end_date: '2017-02-28'
+    geometry: point
+    size: 20000
+    resolution: 10
+    sort_by: 'name'
+    features_src: "ft:1dHi-etD8wtSMPJh-_QT07dKSPO0PE9quSXKCfXeN"
+    sensors: [0,1,2]
+
+  - name: ['spring', '1158']
+    start_date: '2017-03-01'
+    end_date: '2017-05-30'
+    geometry: point
+    size: 20000
+    resolution: 10
+    sort_by: 'name'
+    features_src: "ft:1JLPWjSewCd040i_bstDrNrCAvSAaep3i_QRJm-Tb"
+    sensors: [0,1,2]
+
+  - name: ['autumn', '1970']
+    start_date: '2017-09-01'
+    end_date: '2017-11-30'
+    geometry: point
+    size: 20000
+    resolution: 10
+    sort_by: 'name'
+    features_src: "ft:1o6ZNS2lkXUiloJ96_UipxR8BWwMoXVnM_Cd4ERHm"
+    sensors: [0,1,2]
