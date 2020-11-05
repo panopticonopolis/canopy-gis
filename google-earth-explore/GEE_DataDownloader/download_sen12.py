@@ -16,9 +16,9 @@ def makeFilterList(sensor):
 	def _build_filters(filter_list):
 		filters = []
 		for f in filter_list:
-			key = f.keys()[0]
-			op = f.values()[0].keys()[0]
-			val = f.values()[0].values()[0]
+			key = list(f.keys())[0]
+			op = list(list(f.values())[0].keys())[0]
+			val = list(list(f.values())[0].values())[0]
 			filters.append(getattr(ee.Filter, op)(key, val))
 
 		return filters
@@ -96,17 +96,17 @@ def process_datasource(task_queue, source, sensor, export_to, export_dest, featu
 			'kwargs': {
 				'roi': roi,
 				'export_params': export_params,
-				'type': sensor['type'],
+				'sensor': sensor,
 				'date_range': {'start_date': source['start_date'], 'end_date': source['end_date']}
 			}
 		}
 
 		task_queue.add_task(task_params, blocking=True)
 
-def export_single_feature(roi=None, type=None, date_range=None, export_params=None):
+def export_single_feature(roi=None, sensor=None, date_range=None, export_params=None):
 	modifiers = None
 	if sensor['type'].lower() == "opt":
-		print(sensor['type'])
+		#print(sensor['type'])
 		modifiers = [sentinel2CloudScore, calcCloudCoverage]
 
 	roi_ee = ee.Geometry.Polygon(roi[0])
@@ -120,7 +120,7 @@ def export_single_feature(roi=None, type=None, date_range=None, export_params=No
 	return exportImageToGCS(**new_params)
 
 def _serialise_task_log(task_log):
-	for k,v in task_log.iteritems():
+	for k,v in task_log.items():
 		task_log[k]['task_def']['action'] = "export_single_feature"
 
 	return task_log
@@ -129,7 +129,7 @@ def load_task_log(filename='task_log.json'):
 	with open(filename, 'r') as f:
 		task_log = json.load(f)
 
-	for k, v in task_log.iteritems():
+	for k, v in task_log.items():
 		task_log[k]['task_def']['action'] = globals()[task_log[k]['task_def']['action']]
 
 	return task_log
