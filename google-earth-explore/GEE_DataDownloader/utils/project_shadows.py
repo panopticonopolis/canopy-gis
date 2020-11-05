@@ -1,6 +1,6 @@
 import ee
 
-from helpers import dilatedErossion
+from .helpers import dilatedErossion
 
 # Implementation of Basic cloud shadow shift
 # Author: Gennadii Donchyts

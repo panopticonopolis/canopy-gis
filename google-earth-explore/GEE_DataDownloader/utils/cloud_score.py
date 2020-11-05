@@ -1,6 +1,6 @@
 import ee
 
-from helpers import rescale, dilatedErossion
+from .helpers import rescale, dilatedErossion
 
 def sentinel2CloudScore(img):
     toa = img.select(['B1','B2','B3','B4','B5','B6','B7','B8','B8A', 'B9','B10', 'B11','B12']) \

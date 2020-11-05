@@ -51,8 +51,8 @@ def makeImageCollection(sensor, roi, start_date, end_date, modifiers=[]):
 
 	return collection.select(sensor['bands'])
 
-def process_datasource(task_queue, source, sensor, export_to, export_dest):
-	feature_list = ee.FeatureCollection(source['features_src'])
+def process_datasource(task_queue, source, sensor, export_to, export_dest, feature_list = None):
+# 	feature_list = ee.FeatureCollection(source['features_src'])
 	feature_list = feature_list.sort(source['sort_by']).toList(feature_list.size())
 	n_features = feature_list.size().getInfo()
 
@@ -106,6 +106,7 @@ def process_datasource(task_queue, source, sensor, export_to, export_dest):
 def export_single_feature(roi=None, type=None, date_range=None, export_params=None):
 	modifiers = None
 	if sensor['type'].lower() == "opt":
+		print(sensor['type'])
 		modifiers = [sentinel2CloudScore, calcCloudCoverage]
 
 	roi_ee = ee.Geometry.Polygon(roi[0])

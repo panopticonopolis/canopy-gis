@@ -1,6 +1,6 @@
 ---
 
-downloadDirectory: "/sentinel/"
+downloadDirectory: "/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/GEE/test_cloud_mask_v2/DL_test"
 export_to: bucket
 export_dest: "sentinel2"
 log_file: "gee_download_log.pkl"
