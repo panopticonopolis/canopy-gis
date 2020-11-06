@@ -34,6 +34,37 @@ def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=N
 
     return(export)
 
+def exportImageToGDrive(img=None, roi=None, folder=None, filename=None, dest_path=None, resolution=10, start=True):
+
+#downConfig = {
+    #'scale': 10, 
+    #"maxPixels": 1.0E13, 
+    #'driveFolder': 'image3',
+    #"driveFileNamePrefix":str(i)
+#}  # scale means resolution.
+    #image_to_dl = ee.Image(image_dl_list.get(i))
+    # img_2 = image_to_dl.select('B.+')
+    #img_2 = image_to_dl.select(RGB)
+    #name = img_2.getInfo()["id"].split("/")[-1]
+    #print("Image to Download:",name)
+    #task = ee.batch.Export.image(img_2, name, downConfig)
+    #task.start()
+
+    downConfig = {
+        'scale': resolution,
+        'region': roi,
+        'driveFileNamePrefix': dest_path,
+        'driveFolder': folder,
+        'maxPixels': 1e13,
+    }
+
+    export = ee.batch.Export.image(img, filename, downConfig)
+
+    if start:
+        export.start()
+
+    return(export)
+
 def rescale(img, exp, thresholds):
     return img.expression(exp, {"img": img}) \
               .subtract(thresholds[0]) \

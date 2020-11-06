@@ -60,7 +60,10 @@ def process_datasource(task_queue, source, sensor, export_to, export_dest, featu
 
 	task_list = []
 
-	for i in range(1, n_features):
+	### ERROR? ###
+	## Originally this was range(1, n_features), but we're pretty sure
+	## that should be 0 so we changed it.
+	for i in range(0, n_features):
 		feature_point = ee.Feature( feature_list.get(i) )
 
 		if source['geometry'] == "point":
@@ -69,9 +72,14 @@ def process_datasource(task_queue, source, sensor, export_to, export_dest, featu
 		roi = feature_point.geometry()
 		roi = roi.coordinates().getInfo()
 
+		### should be done outside the for loop ###
 		if isinstance(source['name'], str):
 			source['name'] = [source['name']]
 
+		### ERROR? ###
+		## The following conditional should be moved under
+		## the conditional after it, or else we'll error out
+		## if sensor doesn't have a "prefix" key.
 		if isinstance(sensor['prefix'], str):
 			sensor['prefix'] = [sensor['prefix']]
 
@@ -79,6 +87,7 @@ def process_datasource(task_queue, source, sensor, export_to, export_dest, featu
 			filename_parts = sensor['prefix'] + source['name']
 		else:
 			filename_parts = source['name']
+		### end of part that should be done outside the for loop ###
 
 		filename = "_".join(source['name'] + [str(i)])
 		dest_path = "/".join(filename_parts + [filename])
