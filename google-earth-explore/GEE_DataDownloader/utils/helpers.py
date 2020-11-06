@@ -34,7 +34,7 @@ def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=N
 
     return(export)
 
-def exportImageToGDrive(img=None, roi=None, folder=None, filename=None, dest_path=None, resolution=10, start=True):
+def exportImageToGDrive(img=None, roi=None, drive_folder=None, filename=None, dest_path=None, resolution=10, start=True):
 
 #downConfig = {
     #'scale': 10, 
