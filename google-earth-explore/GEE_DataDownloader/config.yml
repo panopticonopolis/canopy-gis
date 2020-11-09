@@ -36,8 +36,8 @@ sensors:
 
 data_list:
   - name: ['summer', '1886']
-    start_date: '2017-06-01'
-    end_date: '2017-08-31'
+    start_date: '2017-01-01'
+    end_date: '2020-01-01'
     geometry: point
     size: 20000
     resolution: 10
@@ -47,7 +47,7 @@ data_list:
 
   - name: ['winter','2017']
     start_date: '2016-12-01'
-    end_date: '2017-02-28'
+    end_date: '2020-01-01'
     geometry: point
     size: 20000
     resolution: 10
@@ -57,7 +57,7 @@ data_list:
 
   - name: ['spring', '1158']
     start_date: '2017-03-01'
-    end_date: '2017-05-30'
+    end_date: '2020-01-01'
     geometry: point
     size: 20000
     resolution: 10
@@ -67,7 +67,7 @@ data_list:
 
   - name: ['autumn', '1970']
     start_date: '2017-09-01'
-    end_date: '2017-11-30'
+    end_date: '2020-01-01'
     geometry: point
     size: 20000
     resolution: 10
