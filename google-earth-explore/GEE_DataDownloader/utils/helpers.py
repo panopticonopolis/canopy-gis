@@ -54,7 +54,7 @@ def exportImageToGDrive(img=None, roi=None, drive_folder=None, filename=None, de
         'scale': resolution,
         'region': roi,
         'driveFileNamePrefix': dest_path,
-        'driveFolder': folder,
+        'driveFolder': drive_folder,
         'maxPixels': 1e13,
     }
 
