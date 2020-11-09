@@ -120,7 +120,8 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 
 	roi_ee = ee.Geometry.Polygon(roi[0])
 	image_collection = makeImageCollection(sensor, roi_ee, date_range['start_date'], date_range['end_date'], modifiers=modifiers)
-	img = ee.Image(image_collection.mosaic())
+	img = image_collection.mosaic().clip(roi_ee)
+	#print('Mosaic type:', type(img))
 
 	new_params = export_params.copy()
 	new_params['img'] = img
