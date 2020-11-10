@@ -137,3 +137,14 @@ def calcCloudCoverage(img, cloudThresh=0.2):
 
 def clipToROI(x, roi):
     return x.clip(roi).set('ROI', roi)
+
+def inject_B10(img):
+    ee_img_ind = img.get('system:index')
+    coll = ee.ImageCollection('COPERNICUS/S2')\
+        .filterMetadata('system:index', 'equals', ee_img_ind)
+        
+    L1C_img = coll.first()
+    
+    B10 = L1C_img.select('B10')
+    
+    return img.addBands(B10)

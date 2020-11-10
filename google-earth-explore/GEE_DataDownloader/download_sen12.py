@@ -4,7 +4,7 @@ import time
 import os
 import json
 from argparse import ArgumentParser
-from utils import clipToROI, exportImageCollectionToGCS, exportImageToGCS, sentinel2CloudScore, calcCloudCoverage
+from utils import clipToROI, exportImageCollectionToGCS, exportImageToGCS, sentinel2CloudScore, calcCloudCoverage, inject_B10
 from utils import GEETaskManager
 
 from gevent.fileobject import FileObjectThread
@@ -37,7 +37,8 @@ def makeImageCollection(sensor, roi, start_date, end_date, modifiers=[]):
 	collection = ee.ImageCollection(sensor['name']) \
 				.filterDate(ee.Date(start_date), ee.Date(end_date)) \
 				.filterBounds(roi) \
-				.map( lambda x: clipToROI(x, ee.Geometry(roi)) )
+				.map( lambda x: clipToROI(x, ee.Geometry(roi)) ) \
+				.map(inject_B10)
 
 	if filters_before is not None:
 		collection = collection.filter( filters_before )
