@@ -39,6 +39,8 @@ def makeImageCollection(sensor, roi, start_date, end_date, modifiers=[]):
 				.filterBounds(roi) \
 				.map( lambda x: clipToROI(x, ee.Geometry(roi)) ) \
 				.map(inject_B10)
+    
+# 	print(collection.getInfo())
 
 	if filters_before is not None:
 		collection = collection.filter( filters_before )

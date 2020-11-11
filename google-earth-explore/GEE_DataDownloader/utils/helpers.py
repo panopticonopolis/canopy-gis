@@ -18,6 +18,8 @@ def exportImageCollectionToGCS(imgC, bucket=None, resolution=10, start=False):
     return(task_ids)
 
 def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=None, resolution=10, start=True):
+    
+    img = img.select(['TCI_R', 'TCI_G', 'TCI_B'])
 
     export = ee.batch.Export.image.toCloudStorage(
       image=img,

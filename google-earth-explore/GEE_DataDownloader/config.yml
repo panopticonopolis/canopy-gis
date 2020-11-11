@@ -11,10 +11,10 @@ max_retry: 1
 task_timeout: 14400
 
 sensors:
-  - name: "COPERNICUS/S2"
+  - name: "COPERNICUS/S2_SR"
     prefix: "S2_CloudFree"
     type: "opt"
-    bands: ['B1','B2','B3','B4','B5','B6','B7','B8','B8A', 'B9','B10', 'B11','B12']
+    bands: ['B1','B2','B3','B4','B5','B6','B7','B8','B8A', 'B9','B10', 'B11','B12','TCI_R', 'TCI_G', 'TCI_B']
     filters_after:
       - CLOUDY_PERCENTAGE: {'lte': 10}
 
@@ -36,7 +36,7 @@ sensors:
       - transmitterReceiverPolarisation: {'listContains': 'VH'}
 
 data_list:
-  - name: ['summer', '1886']
+  - name: ['test']
     start_date: '2019-01-01'
     end_date: '2020-12-31'
     geometry: point
