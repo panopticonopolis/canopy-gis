@@ -3,6 +3,7 @@ import yaml
 import time
 import os
 import json
+import time
 from argparse import ArgumentParser
 from utils import clipToROI, exportImageCollectionToGCS, exportImageToGCS, sentinel2CloudScore, calcCloudCoverage, inject_B10, sentinel2ProjectShadows, computeQualityScore, mergeCollection
 from utils import GEETaskManager
@@ -46,21 +47,24 @@ def makeImageCollection(sensor, roi, start_date, end_date, modifiers=[]):
 
 	if modifiers and len(modifiers) > 0:
 		for m in modifiers:
+			#print(f'Applying modifier {m}')
 			collection = collection.map(m)
 
 	if filters_after:
 		collection = collection.filter( filters_after )
 
-	return collection.select(sensor['bands'])
+	return collection
 
-def process_datasource(task_queue, source, sensor, export_to, export_dest, feature_list = None, pre_mosaic_sort='CLOUDY_PERCENTAGE'):
+def process_datasource(source, sensor, export_folder, feature_list = None, pre_mosaic_sort='CLOUDY_PERCENTAGE'):
 # 	feature_list = ee.FeatureCollection(source['features_src'])
 	feature_list = feature_list.sort(source['sort_by']).toList(feature_list.size())
 	n_features = feature_list.size().getInfo()
 
 	print("{} features have been loaded".format(n_features))
 
-	task_list = []
+	#task_list = []
+
+	exports = []
 
 	### ERROR? ###
 	## Originally this was range(1, n_features), but we're pretty sure
@@ -68,8 +72,8 @@ def process_datasource(task_queue, source, sensor, export_to, export_dest, featu
 	for i in range(0, n_features):
 		feature_point = ee.Feature( feature_list.get(i) )
 
-		if source['geometry'] == "point":
-			feature_point = feature_point.buffer(source['size']).bounds()
+		#if source['geometry'] == "point":
+		#	feature_point = feature_point.buffer(source['size']).bounds()
 
 		roi = feature_point.geometry()
 		roi = roi.coordinates().getInfo()
@@ -91,38 +95,53 @@ def process_datasource(task_queue, source, sensor, export_to, export_dest, featu
 			filename_parts = source['name']
 		### end of part that should be done outside the for loop ###
 
-		filename = "_".join(source['name'] + [str(i)])
+		time_stamp = "_".join(time.ctime().split(" ")[1:])
+		filename = "_".join(source['name'] + [str(i)] + [time_stamp])
 		dest_path = "/".join(filename_parts + [filename])
 
 		export_params = {
-			'bucket': export_dest,
+			'bucket': export_folder,
 			'resolution': source['resolution'],
 			'filename': filename,
 			'dest_path': dest_path
 		}
 
-		task_params = {
-			'action': export_single_feature,
-			'id': "_".join(filename_parts + [str(i)]), # This must be unique per task, to allow to track retries
-			'kwargs': {
-				'roi': roi,
-				'export_params': export_params,
-				'sensor': sensor,
-				'date_range': {'start_date': source['start_date'], 'end_date': source['end_date'],
-				'sort_by': pre_mosaic_sort}
-			}
-		}
+		# task_params = {
+		# 	'action': export_single_feature,
+		# 	'id': "_".join(filename_parts + [str(i)]), # This must be unique per task, to allow to track retries
+		# 	'kwargs': {
+		# 		'roi': roi,
+		# 		'export_params': export_params,
+		# 		'sensor': sensor,
+		# 		'date_range': {'start_date': source['start_date'], 'end_date': source['end_date'],
+		# 		'sort_by': pre_mosaic_sort}
+		# 	}
+		# }
 
-		task_queue.add_task(task_params, blocking=True)
+		# task_queue.add_task(task_params, blocking=True)
+
+		export = export_single_feature(
+			roi=roi,
+			sensor=sensor,
+			date_range={'start_date': source['start_date'], 'end_date': source['end_date']},
+			export_params=export_params,
+			sort_by=pre_mosaic_sort
+		)
+
+		exports.append(export)
+
+	return exports
 
 def export_single_feature(roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PERCENTAGE'):
 	modifiers = []
+	if sensor['name'].lower() == "copernicus/s2_sr":
+		print('Inject B10')
+		modifiers.append(inject_B10)
 	if sensor['type'].lower() == "opt":
 		#print(sensor['type'])
-		modifiers = [sentinel2CloudScore, calcCloudCoverage, sentinel2ProjectShadows, computeQualityScore]
-	if sensor['name'].lower() == "copernicus/s2_sr":
-		modifiers.append(inject_B10)
+		modifiers += [sentinel2CloudScore, calcCloudCoverage, sentinel2ProjectShadows, computeQualityScore]
 
+	#print('Modifiers:', modifiers)
 	roi_ee = ee.Geometry.Polygon(roi[0])
 	image_collection = makeImageCollection(sensor, roi_ee, date_range['start_date'], date_range['end_date'], modifiers=modifiers)
 	## sort was not in the original version
@@ -130,7 +149,7 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 	## below line was in the original verson;
 	## changing to the JS version
 	## img = image_collection.mosaic().clip(roi_ee)
-	cloudFree = mergeCollection(image_collection)
+	cloudFree = mergeCollection(image_collection).clip(roi_ee)
 	cloudFree = cloudFree.reproject('EPSG:4326', None, 10)
 	### Do we need to mosaic it now???
 	print('cloudFree info:', cloudFree.getInfo())
@@ -167,12 +186,16 @@ def monitor_tasks(task_log):
 
 	f_raw.close()
 
-def load_config(path):
-	with open(path, 'r') as stream:
-		try:
-			return yaml.load(stream)
-		except yaml.YAMLError as exc:
-			print(exc)
+# def load_config(path):
+# 	with open(path, 'r') as stream:
+# 		try:
+# 			return yaml.load(stream)
+# 		except yaml.YAMLError as exc:
+# 			print(exc)
+
+def load_config(config_file):
+    stream = open(config_file, 'r') 
+    return yaml.load(stream)
 
 if __name__ == "__main__":
 	parser = ArgumentParser()

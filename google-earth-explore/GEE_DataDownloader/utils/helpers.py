@@ -98,6 +98,7 @@ def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE', filterType
     # Select the best images, which are below the cloud free threshold, sort them in reverse order (worst on top) for mosaicing
     ## same as the JS version
     best = imgC.filterMetadata(filterBy, filterType, keepThresh).sort(filterBy, False)
+    #print('Info on first image of collection:', imgC.first().getInfo())
     filtered = imgC.qualityMosaic(mosaicBy)
 
     # Add the quality mosaic to fill in any missing areas of the ROI which aren't covered by good images
