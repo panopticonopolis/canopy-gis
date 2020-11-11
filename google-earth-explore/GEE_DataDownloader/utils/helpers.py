@@ -17,9 +17,13 @@ def exportImageCollectionToGCS(imgC, bucket=None, resolution=10, start=False):
 
     return(task_ids)
 
-def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=None, resolution=10, start=True):
-    
-    img = img.select(['TCI_R', 'TCI_G', 'TCI_B'])
+def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=None, resolution=10, start=True, sensor_name=None):
+    ## same as in the JS version
+
+    if sensor_name == 'copernicus/s2':
+        img = img.select(['B4', 'B3', 'B2'])
+    elif sensor_name == 'copernicus/s2_sr':
+        img = img.select(['TCI_R', 'TCI_G', 'TCI_B'])
 
     export = ee.batch.Export.image.toCloudStorage(
       image=img,
@@ -70,12 +74,14 @@ def exportImageToGDrive(img=None, roi=None, drive_folder=None, filename=None, de
     return(export)
 
 def rescale(img, exp, thresholds):
+    ## identical to the javascript
     return img.expression(exp, {"img": img}) \
               .subtract(thresholds[0]) \
               .divide(thresholds[1] - thresholds[0])
 
 def dilatedErossion(score, dilationPixels=3, erodePixels=1.5):
   # Perform opening on the cloud scores
+  ## same as the JS version
   score = score \
             .reproject('EPSG:4326', None, 20) \
             .focal_min(radius=erodePixels, kernelType='circle', iterations=3) \
@@ -90,6 +96,7 @@ def dilatedErossion(score, dilationPixels=3, erodePixels=1.5):
 #        output: A single cloud free mosaic for the region of interest
 def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE', filterType='less_than', mosaicBy='cloudShadowScore'):
     # Select the best images, which are below the cloud free threshold, sort them in reverse order (worst on top) for mosaicing
+    ## same as the JS version
     best = imgC.filterMetadata(filterBy, filterType, keepThresh).sort(filterBy, False)
     filtered = imgC.qualityMosaic(mosaicBy)
 
@@ -122,14 +129,46 @@ def calcCloudCoverage(img, cloudThresh=0.2):
       geometry=roi,
       scale=10,
       maxPixels=1e12,
+      ## bottom two not in the javascript version
       bestEffort=True,
       tileScale=16
     )
 
+    ## maxAreaError not in the javascript version, which uses the default
+    ## for the .area function calls
     maxAreaError = 10
     cloudPercent = ee.Number(stats.get('cloudMask')).divide(imgPoly.area(maxAreaError)).multiply(100)
     coveragePercent = ee.Number(intersection.area(maxAreaError)).divide(roi.area(maxAreaError)).multiply(100)
     cloudPercentROI = ee.Number(stats.get('cloudMask')).divide(roi.area(maxAreaError)).multiply(100)
+
+    img = img.set('CLOUDY_PERCENTAGE', cloudPercent)
+    img = img.set('ROI_COVERAGE_PERCENT', coveragePercent)
+    img = img.set('CLOUDY_PERCENTAGE_ROI', cloudPercentROI)
+
+    return img
+
+def calcCloudCoverage_java(img, cloudThresh=0.2):
+    imgPoly = ee.Algorithms.GeometryConstructors.Polygon(
+              ee.Geometry( img.get('system:footprint') ).coordinates()
+              )
+
+    roi = ee.Geometry(img.get('ROI'))
+
+    intersection = roi.intersection(imgPoly, ee.ErrorMargin(0.5))
+    cloudMask = img.select(['cloudScore']).gt(cloudThresh).clip(roi).rename('cloudMask')
+
+    cloudAreaImg = cloudMask.multiply(ee.Image.pixelArea())
+
+    stats = cloudAreaImg.reduceRegion(
+      reducer=ee.Reducer.sum(),
+      geometry=roi,
+      scale=10,
+      maxPixels=1e12,
+    )
+
+    cloudPercent = ee.Number(stats.get('cloudMask')).divide(imgPoly.area()).multiply(100)
+    coveragePercent = ee.Number(intersection.area(maxAreaError)).divide(roi.area()).multiply(100)
+    cloudPercentROI = ee.Number(stats.get('cloudMask')).divide(roi.area()).multiply(100)
 
     img = img.set('CLOUDY_PERCENTAGE', cloudPercent)
     img = img.set('ROI_COVERAGE_PERCENT', coveragePercent)
@@ -150,3 +189,25 @@ def inject_B10(img):
     B10 = L1C_img.select('B10')
     
     return img.addBands(B10)
+
+## new function found in the javascript
+def computeQualityScore(img):
+    score = img.select(['cloudScore']).max(img.select(['shadowScore']))
+
+    score = score.reproject('EPSG:4326', None, 20).reduceNeighborhood(
+        reducer=ee.Reducer.mean(),
+        kernel=ee.Kernel.square(5)
+    )
+
+    score = score.multiply(-1)
+
+    return img.addBands(score.rename('cloudShadowScore'))
+
+## new function found in the javascript
+def uniqueValues(collection, field):
+    values = ee.Dictionary(
+        collection.reduceColumns(ee.Reducer.frequencyHistogram(), [field])\
+            .get('histogram')
+    ).keys()
+
+    return values

@@ -34,7 +34,12 @@ def sentinel2CloudScore(img):
     score = score.max(ee.Image(0.001))
 
     # Remove small regions and clip the upper bound
-    dilated = dilatedErossion(score).min(ee.Image(1.0))
+    ## commenting this out--pointless to do this unless we do the
+    ## following line (42), which is also commented out in the JS
+    ## dilated = dilatedErossion(score).min(ee.Image(1.0))
+
+    ## This was commented out in the javascript--why?
+    ## score = score.multiply(dilated)
 
     score = score.reduceNeighborhood(
         reducer=ee.Reducer.mean(),

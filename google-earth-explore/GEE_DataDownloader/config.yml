@@ -9,6 +9,7 @@ log_file: "gee_download_log.pkl"
 max_tasks: 5
 max_retry: 1
 task_timeout: 14400
+pre_mosaic_sort: 'CLOUDY_PERCENTAGE'
 
 sensors:
   - name: "COPERNICUS/S2_SR"

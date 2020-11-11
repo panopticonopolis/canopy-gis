@@ -4,7 +4,7 @@ import time
 import os
 import json
 from argparse import ArgumentParser
-from utils import clipToROI, exportImageCollectionToGCS, exportImageToGCS, sentinel2CloudScore, calcCloudCoverage, inject_B10
+from utils import clipToROI, exportImageCollectionToGCS, exportImageToGCS, sentinel2CloudScore, calcCloudCoverage, inject_B10, sentinel2ProjectShadows, computeQualityScore, mergeCollection
 from utils import GEETaskManager
 
 from gevent.fileobject import FileObjectThread
@@ -37,8 +37,7 @@ def makeImageCollection(sensor, roi, start_date, end_date, modifiers=[]):
 	collection = ee.ImageCollection(sensor['name']) \
 				.filterDate(ee.Date(start_date), ee.Date(end_date)) \
 				.filterBounds(roi) \
-				.map( lambda x: clipToROI(x, ee.Geometry(roi)) ) \
-				.map(inject_B10)
+				.map( lambda x: clipToROI(x, ee.Geometry(roi)) )
     
 # 	print(collection.getInfo())
 
@@ -54,7 +53,7 @@ def makeImageCollection(sensor, roi, start_date, end_date, modifiers=[]):
 
 	return collection.select(sensor['bands'])
 
-def process_datasource(task_queue, source, sensor, export_to, export_dest, feature_list = None):
+def process_datasource(task_queue, source, sensor, export_to, export_dest, feature_list = None, pre_mosaic_sort='CLOUDY_PERCENTAGE'):
 # 	feature_list = ee.FeatureCollection(source['features_src'])
 	feature_list = feature_list.sort(source['sort_by']).toList(feature_list.size())
 	n_features = feature_list.size().getInfo()
@@ -109,26 +108,38 @@ def process_datasource(task_queue, source, sensor, export_to, export_dest, featu
 				'roi': roi,
 				'export_params': export_params,
 				'sensor': sensor,
-				'date_range': {'start_date': source['start_date'], 'end_date': source['end_date']}
+				'date_range': {'start_date': source['start_date'], 'end_date': source['end_date'],
+				'sort_by': pre_mosaic_sort}
 			}
 		}
 
 		task_queue.add_task(task_params, blocking=True)
 
-def export_single_feature(roi=None, sensor=None, date_range=None, export_params=None):
-	modifiers = None
+def export_single_feature(roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PERCENTAGE'):
+	modifiers = []
 	if sensor['type'].lower() == "opt":
 		#print(sensor['type'])
-		modifiers = [sentinel2CloudScore, calcCloudCoverage]
+		modifiers = [sentinel2CloudScore, calcCloudCoverage, sentinel2ProjectShadows, computeQualityScore]
+	if sensor['name'].lower() == "copernicus/s2_sr":
+		modifiers.append(inject_B10)
 
 	roi_ee = ee.Geometry.Polygon(roi[0])
 	image_collection = makeImageCollection(sensor, roi_ee, date_range['start_date'], date_range['end_date'], modifiers=modifiers)
-	img = image_collection.mosaic().clip(roi_ee)
+	## sort was not in the original version
+	image_collection = image_collection.sort(sort_by)
+	## below line was in the original verson;
+	## changing to the JS version
+	## img = image_collection.mosaic().clip(roi_ee)
+	cloudFree = mergeCollection(image_collection)
+	cloudFree = cloudFree.reproject('EPSG:4326', None, 10)
+	### Do we need to mosaic it now???
+	print('cloudFree info:', cloudFree.getInfo())
 	#print('Mosaic type:', type(img))
 
 	new_params = export_params.copy()
-	new_params['img'] = img
+	new_params['img'] = cloudFree
 	new_params['roi'] = roi
+	new_params['sensor_name'] = sensor['name'].lower()
 
 	return exportImageToGCS(**new_params)
 
@@ -181,10 +192,11 @@ if __name__ == "__main__":
 		task_log = load_task_log(filename='task_log.json')
 		task_queue.set_task_log(task_log)
 
+	pre_mosaic_sort = config['pre_mosaic_sort']
 	for data_list in config['data_list']:
 		for sensor_idx in data_list['sensors']:
 			sensor = config['sensors'][sensor_idx]
-			tasks = process_datasource(task_queue, data_list, sensor, config['export_to'], config['export_dest'])
+			tasks = process_datasource(task_queue, data_list, sensor, config['export_to'], config['export_dest'], pre_mosaic_sort)
 
 	print("Waiting for completion...")
 	task_queue.wait_till_done()

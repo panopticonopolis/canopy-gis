@@ -1,4 +1,6 @@
 import ee
+## original code did not import math
+import math
 
 from .helpers import dilatedErossion
 
@@ -7,6 +9,8 @@ from .helpers import dilatedErossion
 # License: Apache 2.0
 # Modified by Lloyd Hughes to reduce spurious cloud shadow masks
 def sentinel2ProjectShadows(image, cloudHeights=list(range(200, 10000, 250)), cloudThresh=0.2, irSumThresh=0.3, ndviThresh=-0.1):
+  ## this function was not used anywhere else in the code.
+  ## otherwise, same as the JS version
   meanAzimuth = image.get('MEAN_SOLAR_AZIMUTH_ANGLE')
   meanZenith = image.get('MEAN_SOLAR_ZENITH_ANGLE')
 
