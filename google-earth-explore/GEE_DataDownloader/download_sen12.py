@@ -160,7 +160,7 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 	new_params['img'] = cloudFree
 	new_params['roi'] = roi
 	new_params['sensor_name'] = sensor['name'].lower()
-
+    
 	return exportImageToGCS(**new_params)
 
 def _serialise_task_log(task_log):
