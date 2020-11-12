@@ -3,7 +3,7 @@
 downloadDirectory: "/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/GEE/test_cloud_mask_v2/DL_test"
 export_to: bucket
 drive_folder: "cm_v2_testing"
-bucket: "project_canopy_temp"
+bucket: "project-canopy-temp-2"
 export_dest: "sentinel2"
 log_file: "gee_download_log.pkl"
 max_tasks: 5
