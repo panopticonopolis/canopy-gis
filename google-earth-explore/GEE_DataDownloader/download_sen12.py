@@ -96,7 +96,8 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 		### end of part that should be done outside the for loop ###
 
 		time_stamp = "_".join(time.ctime().split(" ")[1:])
-		filename = "_".join(source['name'] + [str(i)] + [time_stamp])
+		filename = "_".join([str(i + 1)] + source['name'] + [time_stamp])
+		print("processing ",filename)
 		dest_path = "/".join(filename_parts + [filename])
 
 		export_params = {
@@ -152,7 +153,7 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 	cloudFree = mergeCollection(image_collection).clip(roi_ee)
 	cloudFree = cloudFree.reproject('EPSG:4326', None, 10)
 	### Do we need to mosaic it now???
-	print('cloudFree info:', cloudFree.getInfo())
+# 	print('cloudFree info:', cloudFree.getInfo())
 	#print('Mosaic type:', type(img))
 
 	new_params = export_params.copy()
