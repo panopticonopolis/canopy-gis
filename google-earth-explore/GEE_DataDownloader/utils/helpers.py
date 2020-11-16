@@ -24,6 +24,8 @@ def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=N
         img = img.select(['B4', 'B3', 'B2'])
     elif sensor_name == 'copernicus/s2_sr':
         img = img.select(['TCI_R', 'TCI_G', 'TCI_B'])
+        
+#     print(img.getInfo())
 
     export = ee.batch.Export.image.toCloudStorage(
       image=img,
@@ -39,8 +41,12 @@ def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=N
 
     if start:
         export.start()
+        
+         
 
-    return(export)
+#     print("exporting final image")
+    return export
+
 
 def exportImageToGDrive(img=None, roi=None, drive_folder=None, filename=None, dest_path=None, resolution=10, start=True):
 
@@ -94,6 +100,7 @@ def dilatedErossion(score, dilationPixels=3, erodePixels=1.5):
 #        input: imgC - Image collection including "cloudScore" band for each image
 #              threshBest - A threshold percentage to select the best image. This image is used directly as "cloudFree" if one exists.
 #        output: A single cloud free mosaic for the region of interest
+
 def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE', filterType='less_than', mosaicBy='cloudShadowScore'):
     # Select the best images, which are below the cloud free threshold, sort them in reverse order (worst on top) for mosaicing
     ## same as the JS version
@@ -103,6 +110,8 @@ def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE', filterType
 
     # Add the quality mosaic to fill in any missing areas of the ROI which aren't covered by good images
     newC = ee.ImageCollection.fromImages( [filtered, best.mosaic()] )
+    
+    print("collection merged")
 
     return ee.Image(newC.mosaic())
 
@@ -119,6 +128,8 @@ def calcCloudCoverage(img, cloudThresh=0.2):
               )
 
     roi = ee.Geometry(img.get('ROI'))
+    #line below to used debug issue with export tile pipeline
+#     roi = img.geometry()
 
     intersection = roi.intersection(imgPoly, ee.ErrorMargin(0.5))
     cloudMask = img.select(['cloudScore']).gt(cloudThresh).clip(roi).rename('cloudMask')
@@ -145,6 +156,8 @@ def calcCloudCoverage(img, cloudThresh=0.2):
     img = img.set('CLOUDY_PERCENTAGE', cloudPercent)
     img = img.set('ROI_COVERAGE_PERCENT', coveragePercent)
     img = img.set('CLOUDY_PERCENTAGE_ROI', cloudPercentROI)
+    
+    print("calculated cloud coverage values")
 
     return img
 
@@ -154,6 +167,7 @@ def calcCloudCoverage_java(img, cloudThresh=0.2):
               )
 
     roi = ee.Geometry(img.get('ROI'))
+    
 
     intersection = roi.intersection(imgPoly, ee.ErrorMargin(0.5))
     cloudMask = img.select(['cloudScore']).gt(cloudThresh).clip(roi).rename('cloudMask')
@@ -201,6 +215,8 @@ def computeQualityScore(img):
     )
 
     score = score.multiply(-1)
+    
+    print("computed quality score")
 
     return img.addBands(score.rename('cloudShadowScore'))
 
