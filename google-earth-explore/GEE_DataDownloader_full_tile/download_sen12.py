@@ -5,10 +5,11 @@ import os
 import json
 import time
 from argparse import ArgumentParser
-from utils import clipToROI, exportImageCollectionToGCS, exportImageToGCS, sentinel2CloudScore, calcCloudCoverage, inject_B10, sentinel2ProjectShadows, computeQualityScore, mergeCollection
+from utils import clipToROI, exportImageCollectionToGCS, exportImageToGCS, sentinel2CloudScore, calcCloudCoverage, calcCloudCoverageTile, inject_B10, sentinel2ProjectShadows, computeQualityScore, mergeCollection
 from utils import GEETaskManager
 
 from gevent.fileobject import FileObjectThread
+
 
 def makeFilterList(sensor):
 	filters_before = None
@@ -32,6 +33,7 @@ def makeFilterList(sensor):
 
 	return filters_before, filters_after
 
+
 def makeImageCollection(sensor, roi, start_date, end_date, modifiers=[]):
 	filters_before, filters_after = makeFilterList(sensor)
 	print(modifiers)
@@ -39,12 +41,12 @@ def makeImageCollection(sensor, roi, start_date, end_date, modifiers=[]):
 	collection = ee.ImageCollection(sensor['name']) \
 				.filterDate(ee.Date(start_date), ee.Date(end_date)) \
 				.filterBounds(roi) \
-				.map( lambda x: clipToROI(x, ee.Geometry(roi)) )
-    
-	print("size of collection:",collection.size().getInfo())
+				.map(lambda x: clipToROI(x, ee.Geometry(roi)))
+
+	print("size of collection:", collection.size().getInfo())
 
 	if filters_before is not None:
-		collection = collection.filter( filters_before )
+		collection = collection.filter(filters_before)
 
 	if modifiers and len(modifiers) > 0:
 		for m in modifiers:
@@ -52,45 +54,55 @@ def makeImageCollection(sensor, roi, start_date, end_date, modifiers=[]):
 			collection = collection.map(m)
 
 	if filters_after:
-		collection = collection.filter( filters_after )
+		collection = collection.filter(filters_after)
 
 	return collection
+
 
 def makeTileCollection(sensor, tile, main_collection, modifiers=[]):
     filters_before, filters_after = makeFilterList(sensor)
 
-    collection = main_collection.filterMetadata('system:index', 'contains', tile)
-                
+    collection = main_collection.filterMetadata(
+        'system:index', 'contains', tile)
+
     if filters_before is not None:
-        collection = collection.filter( filters_before )
+        collection = collection.filter(filters_before)
 
     if modifiers and len(modifiers) > 0:
         for m in modifiers:
             collection = collection.map(m)
 
     if filters_after:
-        collection = collection.filter( filters_after )
+        collection = collection.filter(filters_after)
 
     return collection
 
-def process_datasource(source, sensor, export_folder, feature_list = None, pre_mosaic_sort='CLOUDY_PERCENTAGE'):
+
+def process_datasource(
+    source,
+    sensor,
+    export_folder,
+    feature_list=None,
+     pre_mosaic_sort='CLOUDY_PERCENTAGE'):
 # 	feature_list = ee.FeatureCollection(source['features_src'])
-	feature_list = feature_list.sort(source['sort_by']).toList(feature_list.size())
+	feature_list = feature_list.sort(
+    source['sort_by']).toList(
+        feature_list.size())
 	n_features = feature_list.size().getInfo()
 
 	print("{} features have been loaded".format(n_features))
 
-	#task_list = []
+	# task_list = []
 
 	exports = []
 
 	### ERROR? ###
-	## Originally this was range(1, n_features), but we're pretty sure
-	## that should be 0 so we changed it.
+	# Originally this was range(1, n_features), but we're pretty sure
+	# that should be 0 so we changed it.
 	for i in range(0, n_features):
-		feature_point = ee.Feature( feature_list.get(i) )
+		feature_point = ee.Feature(feature_list.get(i))
 
-		#if source['geometry'] == "point":
+		# if source['geometry'] == "point":
 		#	feature_point = feature_point.buffer(source['size']).bounds()
 
 		roi = feature_point.geometry()
@@ -101,9 +113,9 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 			source['name'] = [source['name']]
 
 		### ERROR? ###
-		## The following conditional should be moved under
-		## the conditional after it, or else we'll error out
-		## if sensor doesn't have a "prefix" key.
+		# The following conditional should be moved under
+		# the conditional after it, or else we'll error out
+		# if sensor doesn't have a "prefix" key.
 		if isinstance(sensor['prefix'], str):
 			sensor['prefix'] = [sensor['prefix']]
 
@@ -115,7 +127,7 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 
 		time_stamp = "_".join(time.ctime().split(" ")[1:])
 		filename = "_".join([str(i + 1)] + source['name'] + [time_stamp])
-		print("processing ",filename)
+		print("processing ", filename)
 		dest_path = "/".join(filename_parts + [filename])
 
 		export_params = {
@@ -142,7 +154,9 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 		export = export_single_feature(
 			roi=roi,
 			sensor=sensor,
-			date_range={'start_date': source['start_date'], 'end_date': source['end_date']},
+			date_range={
+    'start_date': source['start_date'],
+     'end_date': source['end_date']},
 			export_params=export_params,
 			sort_by=pre_mosaic_sort
 		)
@@ -151,9 +165,17 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 
 	return exports
 
-def process_datasource_tiles(source, sensor, export_folder, tile_hash_table, main_polygon=None, pre_mosaic_sort='CLOUDY_PERCENTAGE'):
 
-	tile_list = list(tile_hash_table.keys())
+def process_datasource_tiles(
+    source,
+    sensor,
+    export_folder,
+    tile_hash_table,
+    main_polygon=None,
+    pre_mosaic_sort='CLOUDY_PERCENTAGE',
+	limit=None):
+
+    tile_list = list(tile_hash_table.keys())
 
     n_tiles = len(tile_list)
 
@@ -163,13 +185,19 @@ def process_datasource_tiles(source, sensor, export_folder, tile_hash_table, mai
     
     start_date = source['start_date']
     end_date = source['end_date']
+
+    tile = tile_list[0]
+    roi = json.loads(tile_hash_table[tile]['Polygon'])
+    #print('ROI:', roi)
+    roi_ee = ee.Geometry.Polygon(roi)
     
     main_collection = ee.ImageCollection(sensor['name']) \
-                        .filterDate(ee.Date(start_date), ee.Date(end_date))
+                        .filterDate(ee.Date(start_date), ee.Date(end_date)) \
+						.filterBounds(roi_ee)
     
-    if main_polygon:
-        main_polygon = ee.Geometry.Polygon(main_polygon)
-        main_collection = main_collection.filterBounds(main_polygon_ee)
+    # if main_polygon:
+    #     main_polygon = ee.Geometry.Polygon(main_polygon)
+    #     main_collection = main_collection.filterBounds(main_polygon)
 
     if isinstance(source['name'], str):
         source['name'] = [source['name']]
@@ -181,7 +209,11 @@ def process_datasource_tiles(source, sensor, export_folder, tile_hash_table, mai
     else:
         filename_parts = source['name']
 
-    for i, tile in enumerate(tile_list):
+    if not limit:
+        limit = n_tiles
+
+    for i in range(limit):
+        tile = tile_list[i]
         print(f'Processing tile {tile}')
         
         time_stamp = "_".join(time.ctime().split(" ")[1:])
@@ -189,12 +221,16 @@ def process_datasource_tiles(source, sensor, export_folder, tile_hash_table, mai
         print("processing ",filename)
         dest_path = "/".join(filename_parts + [filename])
 
+        # roi = json.loads(tile_hash_table[tile]['Polygon'])
+        # print('ROI:', roi)
+        # roi_ee = ee.Geometry.Polygon(roi)
+
         export_params = {
             'bucket': export_folder,
             'resolution': source['resolution'],
             'filename': filename,
             'dest_path': dest_path,
-			'roi': tile_hash_table[tile]
+			#'roi': roi_ee
         }
 
         export = export_single_tile(
@@ -216,24 +252,24 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		print('Inject B10')
 		modifiers.append(inject_B10)
 	if sensor['type'].lower() == "opt":
-		#print(sensor['type'])
+		# print(sensor['type'])
 		modifiers += [sentinel2CloudScore, calcCloudCoverage, sentinel2ProjectShadows, computeQualityScore]
 		print(modifiers)
                     
 
-	#print('Modifiers:', modifiers)
+	# print('Modifiers:', modifiers)
 	roi_ee = ee.Geometry.Polygon(roi[0])
 	image_collection = makeImageCollection(sensor, roi_ee, date_range['start_date'], date_range['end_date'], modifiers=modifiers)
-	## sort was not in the original version
+	# sort was not in the original version
 	image_collection = image_collection.sort(sort_by)
-	## below line was in the original verson;
-	## changing to the JS version
-	## img = image_collection.mosaic().clip(roi_ee)
+	# below line was in the original verson;
+	# changing to the JS version
+	# img = image_collection.mosaic().clip(roi_ee)
 	cloudFree = mergeCollection(image_collection).clip(roi_ee)
 	cloudFree = cloudFree.reproject('EPSG:4326', None, 10)
-	### Do we need to mosaic it now???
+	# Do we need to mosaic it now???
 # 	print('cloudFree info:', cloudFree.getInfo())
-	#print('Mosaic type:', type(img))
+	# print('Mosaic type:', type(img))
 
 	new_params = export_params.copy()
 	new_params['img'] = cloudFree
@@ -248,7 +284,7 @@ def export_single_tile(tile, main_collection, main_polygon=None, sensor=None, ex
         print('Inject B10')
         modifiers.append(inject_B10)
     if sensor['type'].lower() == "opt":
-        #print(sensor['type'])
+        # print(sensor['type'])
         modifiers += [sentinel2CloudScore, calcCloudCoverage, sentinel2ProjectShadows, computeQualityScore]
 
     print('Making tile collection')
@@ -257,18 +293,20 @@ def export_single_tile(tile, main_collection, main_polygon=None, sensor=None, ex
 
     print('Making mosaic')
     cloudFree = mergeCollection(tile_collection)
-    if main_polygon:
-        print('Clipping to polygon')
-        cloudFree = cloudFree.clip(main_polygon)
+
+    #cloudFree = cloudFree.clip(export_params['roi'])
+    # if main_polygon:
+    #     print('Clipping to polygon')
+    #     cloudFree = cloudFree.clip(main_polygon)
     cloudFree = cloudFree.reproject('EPSG:4326', None, 10)
 
     new_params = export_params.copy()
     new_params['img'] = cloudFree
-	if main_polygon:
-    	new_params['roi'] = main_polygon
+    # if main_polygon:
+    # 	new_params['roi'] = main_polygon
     new_params['sensor_name'] = sensor['name'].lower()
     
-    #return cloudFree
+    # return cloudFree
     
     return exportImageToGCS(**new_params)
 

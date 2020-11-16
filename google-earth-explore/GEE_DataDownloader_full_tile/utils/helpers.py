@@ -31,7 +31,7 @@ def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=N
       image=img,
       description=filename,
       scale=resolution,
-      region=roi,
+      #region=roi,
       fileNamePrefix=dest_path,
       bucket=bucket,
       maxPixels=1e13
@@ -158,6 +158,32 @@ def calcCloudCoverage(img, cloudThresh=0.2):
     img = img.set('CLOUDY_PERCENTAGE_ROI', cloudPercentROI)
     
     print("calculated cloud coverage values")
+
+    return img
+
+def calcCloudCoverageTile(img, cloudThresh=0.2):
+    imgPoly = ee.Algorithms.GeometryConstructors.Polygon(
+        ee.Geometry(img.get('system:footprint')).coordinates()
+    )
+
+    cloudMask = img.select(['cloudScore']).gt(cloudThresh).rename('cloudMask')
+
+    cloudAreaImg = cloudMask.multiply(ee.Image.pixelArea())
+
+    stats = cloudAreaImg.reduceRegion(
+        reducer=ee.Reducer.sum(),
+        scale=10,
+        maxPixels=1e12,
+        bestEffort=True,
+        tileScale=16
+    )
+
+    maxAreaError = 10
+    cloudPercent = ee.Number(stats.get('cloudMask')).divide(imgPoly.area(maxAreaError)).multiply(100)
+
+    img = img.set('CLOUDY_PERCENTAGE', cloudPercent)
+
+    print('Calculated cloudy percentage values')
 
     return img
 
