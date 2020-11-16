@@ -45,5 +45,7 @@ def sentinel2CloudScore(img):
         reducer=ee.Reducer.mean(),
         kernel=ee.Kernel.square(5)
       )
+    
+    print("Generated cloud score")
 
     return img.addBands(score.rename('cloudScore'))

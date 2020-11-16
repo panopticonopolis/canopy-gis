@@ -34,20 +34,21 @@ def makeFilterList(sensor):
 
 def makeImageCollection(sensor, roi, start_date, end_date, modifiers=[]):
 	filters_before, filters_after = makeFilterList(sensor)
+	print(modifiers)
 
 	collection = ee.ImageCollection(sensor['name']) \
 				.filterDate(ee.Date(start_date), ee.Date(end_date)) \
 				.filterBounds(roi) \
 				.map( lambda x: clipToROI(x, ee.Geometry(roi)) )
     
-# 	print(collection.getInfo())
+	print("size of collection:",collection.size().getInfo())
 
 	if filters_before is not None:
 		collection = collection.filter( filters_before )
 
 	if modifiers and len(modifiers) > 0:
 		for m in modifiers:
-			#print(f'Applying modifier {m}')
+			print(f'Applying modifier {m}')
 			collection = collection.map(m)
 
 	if filters_after:
@@ -141,6 +142,8 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 	if sensor['type'].lower() == "opt":
 		#print(sensor['type'])
 		modifiers += [sentinel2CloudScore, calcCloudCoverage, sentinel2ProjectShadows, computeQualityScore]
+		print(modifiers)
+                    
 
 	#print('Modifiers:', modifiers)
 	roi_ee = ee.Geometry.Polygon(roi[0])
