@@ -127,9 +127,9 @@ def calcCloudCoverage(img, cloudThresh=0.2):
               ee.Geometry( img.get('system:footprint') ).coordinates()
               )
 
-    roi = ee.Geometry(img.get('ROI'))
+    #roi = ee.Geometry(img.get('ROI'))
     #line below to used debug issue with export tile pipeline
-#     roi = img.geometry()
+    roi = img.geometry()
 
     intersection = roi.intersection(imgPoly, ee.ErrorMargin(0.5))
     cloudMask = img.select(['cloudScore']).gt(cloudThresh).clip(roi).rename('cloudMask')

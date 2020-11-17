@@ -37,7 +37,7 @@ sensors:
       - transmitterReceiverPolarisation: {'listContains': 'VH'}
 
 data_list:
-  - name: ['full_tile_calccloudroi_noregionexport']
+  - name: ['full_tile_calccloudroi_noexportregion']
     start_date: '2019-01-01'
     end_date: '2020-12-31'
     geometry: point
