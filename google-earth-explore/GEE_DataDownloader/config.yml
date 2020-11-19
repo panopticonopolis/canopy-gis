@@ -37,7 +37,7 @@ sensors:
       - transmitterReceiverPolarisation: {'listContains': 'VH'}
 
 data_list:
-  - name: ['pipeline_v2_test_1']
+  - name: ['pipeline_v2_6_months_cloudy_percentage']
     start_date: '2019-01-01'
     end_date: '2020-12-31'
     geometry: point

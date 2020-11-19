@@ -103,21 +103,21 @@ def dilatedErossion(score, dilationPixels=3, erodePixels=1.5):
 #              threshBest - A threshold percentage to select the best image. This image is used directly as "cloudFree" if one exists.
 #        output: A single cloud free mosaic for the region of interest
 
-def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PIXEL_PERCENTAGE', filterType='less_than', mosaicBy='cloudShadowScore'):
+def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE', filterType='less_than', mosaicBy='cloudShadowScore'):
     # Select the best images, which are below the cloud free threshold, sort them in reverse order (worst on top) for mosaicing
     ## same as the JS version
     best = imgC.filterMetadata(filterBy, filterType, keepThresh).sort(filterBy, False)
 
-    return collection_quality_test_filter(imgC, best)
-    #print('Info on first image of collection:', imgC.first().getInfo())
-    # filtered = imgC.qualityMosaic(mosaicBy)
+#     return collection_quality_test_filter(imgC, best)
+#     print('Info on first image of collection:', imgC.first().getInfo())
+    filtered = imgC.qualityMosaic(mosaicBy)
 
-    # # Add the quality mosaic to fill in any missing areas of the ROI which aren't covered by good images
-    # newC = ee.ImageCollection.fromImages( [filtered, best.mosaic()] )
+    # Add the quality mosaic to fill in any missing areas of the ROI which aren't covered by good images
+    newC = ee.ImageCollection.fromImages( [filtered, best.mosaic()] )
     
-    # print("collection merged")
+#     print("collection merged")
 
-    # return ee.Image(newC.mosaic())
+    return ee.Image(newC.mosaic())
 
 # calcCloudCoverage: Calculates a mask for clouds in the image.
 #        input: im - Image from image collection with a valid mask layer

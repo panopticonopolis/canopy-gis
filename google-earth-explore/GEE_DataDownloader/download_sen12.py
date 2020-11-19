@@ -134,7 +134,7 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 
 	return exports
 
-def process_datasource_custom_daterange(source, sensor, export_folder, feature_list = None, date_range_list=[]):
+def process_datasource_custom_daterange(source, sensor, export_folder, feature_list = None, date_range_list=[], pre_mosaic_sort='CLOUDY_PIXEL_PERCENTAGE'):
 # 	feature_list = ee.FeatureCollection(source['features_src'])
 	feature_list = feature_list.sort(source['sort_by']).toList(feature_list.size())
 	n_features = feature_list.size().getInfo()
@@ -234,7 +234,7 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 	## changing to the JS version
 	## img = image_collection.mosaic().clip(roi_ee)
 
-	return mergeCollection(image_collection)
+# 	return mergeCollection(image_collection)
 
 	cloudFree = mergeCollection(image_collection).clip(roi_ee)
 	cloudFree = cloudFree.reproject('EPSG:4326', None, 10)
