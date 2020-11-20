@@ -1,5 +1,5 @@
 import ee
-from .dynamic_date_range import collection_quality_test_filter
+from .dynamic_date_range import collection_greater_than
 import logging
 
 
@@ -108,7 +108,7 @@ def dilatedErossion(score, dilationPixels=3, erodePixels=1.5):
 #              threshBest - A threshold percentage to select the best image. This image is used directly as "cloudFree" if one exists.
 #        output: A single cloud free mosaic for the region of interest
 
-def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE', filterType='less_than', mosaicBy='cloudShadowScore', polygon_id=None, date_range=None):
+def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE', filterType='less_than', mosaicBy='cloudShadowScore', polygon_id=None, date_range=None, test_coll=False):
     # Select the best images, which are below the cloud free threshold, sort them in reverse order (worst on top) for mosaicing
     ## same as the JS version
     # logging.info(f'---POLYGON {polygon_id}---')
@@ -117,7 +117,11 @@ def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE', filterType
 
     best = imgC.filterMetadata(filterBy, filterType, keepThresh).sort(filterBy, False)
 
-    return collection_quality_test_filter(imgC, best)
+    if test_coll:
+        coll_is_good = collection_greater_than(best, 5)
+
+        if not coll_is_good:
+            return None
 
     # logging.info(f'Best size: {best.size().getInfo()}')
 

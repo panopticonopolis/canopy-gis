@@ -4,9 +4,11 @@ import time
 import os
 import json
 import time
+from pandas.tseries.offsets import DateOffset
 from argparse import ArgumentParser
 from utils import clipToROI, exportImageCollectionToGCS, exportImageToGCS, sentinel2CloudScore, calcCloudCoverage, inject_B10, sentinel2ProjectShadows, computeQualityScore, mergeCollection
 from utils import GEETaskManager
+from utils import collection_greater_than
 
 from gevent.fileobject import FileObjectThread
 
@@ -207,7 +209,7 @@ def process_datasource_custom_daterange(source, sensor, export_folder, feature_l
 		export = export_single_feature(
 			roi=roi,
 			sensor=sensor,
-			date_range={'start_date': date_range[0], 'end_date': date_range[1]},
+			date_range=date_range,
 			export_params=export_params,
 			sort_by=pre_mosaic_sort,
 			polygon_id=polygon_id
@@ -230,28 +232,73 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 
 	#print('Modifiers:', modifiers)
 	roi_ee = ee.Geometry.Polygon(roi[0])
-	image_collection = makeImageCollection(sensor, roi_ee, date_range['start_date'], date_range['end_date'], modifiers=modifiers)
+	imgC = makeImageCollection(sensor, roi_ee, date_range['start_date'], date_range['end_date'], modifiers=modifiers)
 	## sort was not in the original version
 	#image_collection = image_collection.sort(sort_by)
 	## below line was in the original verson;
 	## changing to the JS version
 	## img = image_collection.mosaic().clip(roi_ee)
 
-# 	return mergeCollection(image_collection)
+	if date_range['day_offset'] == 'two years':
+		# If we're pulling from two years, we'll end the dynamic date range loop and just have
+		# this collection be the final one.
+		cloudFree = mergeCollection(imgC, polygon_id=polygon_id, date_range=date_range, test_coll=False)
+	else:
+		cloudFree = mergeCollection(imgC, polygon_id=polygon_id, date_range=date_range, test_coll=True)
 
-	cloudFree = mergeCollection(image_collection, polygon_id=polygon_id, date_range=date_range).clip(roi_ee)
-	cloudFree = cloudFree.reproject('EPSG:4326', None, 10)
-	return None
-	### Do we need to mosaic it now???
-# 	print('cloudFree info:', cloudFree.getInfo())
-	#print('Mosaic type:', type(img))
+	if cloudFree is None:
+		original_date = date_range['original_date']
+		day_offset = date_range['day_offset']
 
-	# new_params = export_params.copy()
-	# new_params['img'] = cloudFree
-	# new_params['roi'] = roi
-	# new_params['sensor_name'] = sensor['name'].lower()
-    
-	# return exportImageToGCS(**new_params)
+		offset_dict = {
+			45: 90,
+			90: 180,
+			180: 'two years'
+		}
+
+		new_offset = offset_dict[day_offset]
+
+		if new_offset == 'two years':
+			start_date = '2019-01-01'
+			end_date = '2020-12-31'
+		else:
+			start = original_date + DateOffset(days=-day_offset)
+			end = original_date + DateOffset(days=day_offset)
+			start_date = str(start)[:10]
+			end_date = str(end)[:10]
+
+		print(f'Polygon {polygon_id} is increasing offset to {new_offset}')
+
+		new_date_range = {
+			'start_date': start_date,
+			'end_date': end_date,
+			'original_date': original_date,
+			'day_offset': new_offset
+		}
+
+		return export_single_feature(
+					roi=roi,
+					sensor=sensor,
+					date_range=new_date_range,
+					export_params=export_params,
+					sort_by=sort_by,
+					polygon_id=polygon_id
+				)
+
+	else:
+		print(f'Polygon {polygon_id} successfully merged with offset {date_range["day_offset"]}')
+
+		cloudFree = cloudFree.clip(roi_ee).reproject('EPSG:4326', None, 10)
+		## Do we need to mosaic it now???
+		# print('cloudFree info:', cloudFree.getInfo())
+		# print('Mosaic type:', type(img))
+
+		new_params = export_params.copy()
+		new_params['img'] = cloudFree
+		new_params['roi'] = roi
+		new_params['sensor_name'] = sensor['name'].lower()
+		
+		return exportImageToGCS(**new_params)
 
 def _serialise_task_log(task_log):
 	for k,v in task_log.items():

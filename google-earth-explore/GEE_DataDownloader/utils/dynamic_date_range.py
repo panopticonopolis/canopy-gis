@@ -4,13 +4,14 @@ import ee
 def coll_filter_conditional(coll, filter_by='NODATA_PIXEL_PERCENTAGE',
                             filter_type='less_than', filter_thresh=10,
                             cond_type='gte', cond_thresh=30,
-                            print_mod=None):
+                            print_size=False, print_mod=None):
     if filter_by is not None:
         coll = coll.filterMetadata(filter_by, filter_type, filter_thresh)
         
     size = coll.size()
     
-    print(f'Size {print_mod}:', size.getInfo())
+    if print_size:
+        print(f'Size {print_mod}:', size.getInfo())
     
     flag = getattr(size, cond_type)(cond_thresh)
     
