@@ -1,5 +1,10 @@
 import ee
 from .dynamic_date_range import collection_quality_test_filter
+import logging
+
+
+LOG_FILENAME = 'collection_sizes.log'
+logging.basicConfig(filename=LOG_FILENAME,level=logging.INFO)
 
 
 def exportImageCollectionToGCS(imgC, bucket=None, resolution=10, start=False):
@@ -103,10 +108,24 @@ def dilatedErossion(score, dilationPixels=3, erodePixels=1.5):
 #              threshBest - A threshold percentage to select the best image. This image is used directly as "cloudFree" if one exists.
 #        output: A single cloud free mosaic for the region of interest
 
-def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE', filterType='less_than', mosaicBy='cloudShadowScore'):
+def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE', filterType='less_than', mosaicBy='cloudShadowScore', polygon_id=None, date_range=None):
     # Select the best images, which are below the cloud free threshold, sort them in reverse order (worst on top) for mosaicing
     ## same as the JS version
+    # logging.info(f'---POLYGON {polygon_id}---')
+    # logging.info(f'{date_range["start_date"]} to {date_range["end_date"]}')
+    # logging.info(f'Collection size: {imgC.size().getInfo()}')
+
     best = imgC.filterMetadata(filterBy, filterType, keepThresh).sort(filterBy, False)
+
+    return collection_quality_test_filter(imgC, best)
+
+    # logging.info(f'Best size: {best.size().getInfo()}')
+
+    # best_filtered = best.filterMetadata('NODATA_PIXEL_PERCENTAGE', 'less_than', 10)
+
+    # logging.info(f'Filtered best size: {best_filtered.size().getInfo()}')
+    # logging.info('')
+    # logging.info('')
 
 #     return collection_quality_test_filter(imgC, best)
 #     print('Info on first image of collection:', imgC.first().getInfo())

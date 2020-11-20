@@ -149,6 +149,8 @@ def process_datasource_custom_daterange(source, sensor, export_folder, feature_l
 	## Originally this was range(1, n_features), but we're pretty sure
 	## that should be 0 so we changed it.
 	for i in range(0, n_features):
+		polygon_id = i + 1
+
 		feature_point = ee.Feature( feature_list.get(i) )
 
 		#if source['geometry'] == "point":
@@ -175,7 +177,7 @@ def process_datasource_custom_daterange(source, sensor, export_folder, feature_l
 		### end of part that should be done outside the for loop ###
 
 		time_stamp = "_".join(time.ctime().split(" ")[1:])
-		filename = "_".join([str(i + 1)] + source['name'] + [time_stamp])
+		filename = "_".join([str(polygon_id)] + source['name'] + [time_stamp])
 		print("processing ",filename)
 		dest_path = "/".join(filename_parts + [filename])
 
@@ -207,14 +209,15 @@ def process_datasource_custom_daterange(source, sensor, export_folder, feature_l
 			sensor=sensor,
 			date_range={'start_date': date_range[0], 'end_date': date_range[1]},
 			export_params=export_params,
-			sort_by=pre_mosaic_sort
+			sort_by=pre_mosaic_sort,
+			polygon_id=polygon_id
 		)
 
 		exports.append(export)
 
 	return exports
 
-def export_single_feature(roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PIXEL_PERCENTAGE'):
+def export_single_feature(roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PIXEL_PERCENTAGE', polygon_id=None):
 	modifiers = []
 	if sensor['name'].lower() == "copernicus/s2_sr":
 		#print('Inject B10')
@@ -236,18 +239,19 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 
 # 	return mergeCollection(image_collection)
 
-	cloudFree = mergeCollection(image_collection).clip(roi_ee)
+	cloudFree = mergeCollection(image_collection, polygon_id=polygon_id, date_range=date_range).clip(roi_ee)
 	cloudFree = cloudFree.reproject('EPSG:4326', None, 10)
+	return None
 	### Do we need to mosaic it now???
 # 	print('cloudFree info:', cloudFree.getInfo())
 	#print('Mosaic type:', type(img))
 
-	new_params = export_params.copy()
-	new_params['img'] = cloudFree
-	new_params['roi'] = roi
-	new_params['sensor_name'] = sensor['name'].lower()
+	# new_params = export_params.copy()
+	# new_params['img'] = cloudFree
+	# new_params['roi'] = roi
+	# new_params['sensor_name'] = sensor['name'].lower()
     
-	return exportImageToGCS(**new_params)
+	# return exportImageToGCS(**new_params)
 
 def _serialise_task_log(task_log):
 	for k,v in task_log.items():
