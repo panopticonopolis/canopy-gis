@@ -1,4 +1,5 @@
 import ee
+import pandas as pd
 
 
 def coll_filter_conditional(coll, filter_by='NODATA_PIXEL_PERCENTAGE',
@@ -47,3 +48,46 @@ def collection_quality_test_filter(coll, best, coll_min=30, best_min=1,
     coll_is_good = collection_greater_than(coll, coll_min, print_mod='of entire coll')
 
     return coll_is_good
+
+def image_collection_secondary_sort(col,primary_sort=None,secondary_sort=None):
+
+    new_list_of_images = []
+    primary_list = col.aggregate_array(primary_sort)
+    secondary_list = col.aggregate_array(secondary_sort)
+    image_id_list = col.aggregate_array('system:index')
+    
+    
+    sort_dic = \
+    {primary_sort:primary_list,
+     secondary_sort:secondary_list,
+     "id":image_id_list}
+    
+
+    new_sort_dic = {}
+    for key in sort_dic:
+        new_sort_dic[key] = sort_dic[key].getInfo()
+        
+    df = pd.DataFrame(new_sort_dic)
+    
+    df = df.sort_values(by=[primary_sort,secondary_sort],ascending=False)
+    
+    df = df.reset_index()
+    
+    df = df.reset_index()
+    
+    df.rename(columns = {'index':'current_position', 'level_0':'new_position'}, inplace = True) 
+    
+    
+    list_of_images = col.toList(col.size())
+    
+
+    for row in df.iterrows():
+        origin = row[1][1]
+
+        img_dest = ee.Image(list_of_images.get(origin))
+
+        new_list_of_images.append(img_dest)
+
+        
+    return ee.ImageCollection(new_list_of_images)
+    

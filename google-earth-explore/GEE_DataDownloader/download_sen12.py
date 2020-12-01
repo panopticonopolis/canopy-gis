@@ -233,6 +233,8 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 	#print('Modifiers:', modifiers)
 	roi_ee = ee.Geometry.Polygon(roi[0])
 	imgC = makeImageCollection(sensor, roi_ee, date_range['start_date'], date_range['end_date'], modifiers=modifiers)
+	# print(imgC.size().getInfo())
+	# return None
 	## sort was not in the original version
 	#image_collection = image_collection.sort(sort_by)
 	## below line was in the original verson;
@@ -245,6 +247,8 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		cloudFree = mergeCollection(imgC, polygon_id=polygon_id, date_range=date_range, test_coll=False)
 	else:
 		cloudFree = mergeCollection(imgC, polygon_id=polygon_id, date_range=date_range, test_coll=True)
+		# col1,col2 = mergeCollection(imgC, polygon_id=polygon_id, date_range=date_range, test_coll=True)
+		# return col1,col2
 
 	if cloudFree is None:
 		original_date = date_range['original_date']
@@ -298,7 +302,7 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		new_params['roi'] = roi
 		new_params['sensor_name'] = sensor['name'].lower()
 		
-		return exportImageToGCS(**new_params)
+		# return exportImageToGCS(**new_params)
 
 def _serialise_task_log(task_log):
 	for k,v in task_log.items():

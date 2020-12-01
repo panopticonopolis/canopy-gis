@@ -1,5 +1,5 @@
 import ee
-from .dynamic_date_range import collection_greater_than
+from .dynamic_date_range import collection_greater_than,image_collection_secondary_sort
 import logging
 
 
@@ -108,20 +108,22 @@ def dilatedErossion(score, dilationPixels=3, erodePixels=1.5):
 #              threshBest - A threshold percentage to select the best image. This image is used directly as "cloudFree" if one exists.
 #        output: A single cloud free mosaic for the region of interest
 
-def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE', filterType='less_than', mosaicBy='cloudShadowScore', polygon_id=None, date_range=None, test_coll=False):
+def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE',secondary_sort='CLOUDY_PIXEL_PERCENTAGE' ,filterType='less_than', mosaicBy='cloudShadowScore', polygon_id=None, date_range=None, test_coll=False):
     # Select the best images, which are below the cloud free threshold, sort them in reverse order (worst on top) for mosaicing
     ## same as the JS version
     # logging.info(f'---POLYGON {polygon_id}---')
     # logging.info(f'{date_range["start_date"]} to {date_range["end_date"]}')
     # logging.info(f'Collection size: {imgC.size().getInfo()}')
 
-    best = imgC.filterMetadata(filterBy, filterType, keepThresh).sort(filterBy, False)
-
+    best = imgC.filterMetadata(filterBy, filterType, keepThresh)
+    
     if test_coll:
         coll_is_good = collection_greater_than(best, 5)
 
         if not coll_is_good:
             return None
+    
+    best_sorted = image_collection_secondary_sort(best,primary_sort=filterBy,secondary_sort=secondary_sort)
 
     # logging.info(f'Best size: {best.size().getInfo()}')
 
@@ -136,7 +138,7 @@ def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE', filterType
     filtered = imgC.qualityMosaic(mosaicBy)
 
     # Add the quality mosaic to fill in any missing areas of the ROI which aren't covered by good images
-    newC = ee.ImageCollection.fromImages( [filtered, best.mosaic()] )
+    newC = ee.ImageCollection.fromImages( [filtered, best_sorted.mosaic()] )
     
 #     print("collection merged")
 
