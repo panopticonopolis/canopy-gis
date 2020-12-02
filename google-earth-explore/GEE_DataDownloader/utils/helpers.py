@@ -1,4 +1,11 @@
 import ee
+from .dynamic_date_range import collection_greater_than,image_collection_secondary_sort
+import logging
+
+
+LOG_FILENAME = 'collection_sizes.log'
+logging.basicConfig(filename=LOG_FILENAME,level=logging.INFO)
+
 
 def exportImageCollectionToGCS(imgC, bucket=None, resolution=10, start=False):
     task_ids = {}
@@ -101,17 +108,39 @@ def dilatedErossion(score, dilationPixels=3, erodePixels=1.5):
 #              threshBest - A threshold percentage to select the best image. This image is used directly as "cloudFree" if one exists.
 #        output: A single cloud free mosaic for the region of interest
 
-def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE', filterType='less_than', mosaicBy='cloudShadowScore'):
+def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE',secondary_sort='CLOUDY_PIXEL_PERCENTAGE' ,filterType='less_than', mosaicBy='cloudShadowScore', polygon_id=None, date_range=None, test_coll=False):
     # Select the best images, which are below the cloud free threshold, sort them in reverse order (worst on top) for mosaicing
     ## same as the JS version
-    best = imgC.filterMetadata(filterBy, filterType, keepThresh).sort(filterBy, False)
-    #print('Info on first image of collection:', imgC.first().getInfo())
+    # logging.info(f'---POLYGON {polygon_id}---')
+    # logging.info(f'{date_range["start_date"]} to {date_range["end_date"]}')
+    # logging.info(f'Collection size: {imgC.size().getInfo()}')
+
+    best = imgC.filterMetadata(filterBy, filterType, keepThresh)
+    
+    if test_coll:
+        coll_is_good = collection_greater_than(best, 5)
+
+        if not coll_is_good:
+            return None
+    
+    best_sorted = image_collection_secondary_sort(best,primary_sort=filterBy,secondary_sort=secondary_sort)
+
+    # logging.info(f'Best size: {best.size().getInfo()}')
+
+    # best_filtered = best.filterMetadata('NODATA_PIXEL_PERCENTAGE', 'less_than', 10)
+
+    # logging.info(f'Filtered best size: {best_filtered.size().getInfo()}')
+    # logging.info('')
+    # logging.info('')
+
+#     return collection_quality_test_filter(imgC, best)
+#     print('Info on first image of collection:', imgC.first().getInfo())
     filtered = imgC.qualityMosaic(mosaicBy)
 
     # Add the quality mosaic to fill in any missing areas of the ROI which aren't covered by good images
-    newC = ee.ImageCollection.fromImages( [filtered, best.mosaic()] )
+    newC = ee.ImageCollection.fromImages( [filtered, best_sorted.mosaic()] )
     
-    print("collection merged")
+#     print("collection merged")
 
     return ee.Image(newC.mosaic())
 
@@ -157,7 +186,7 @@ def calcCloudCoverage(img, cloudThresh=0.2):
     img = img.set('ROI_COVERAGE_PERCENT', coveragePercent)
     img = img.set('CLOUDY_PERCENTAGE_ROI', cloudPercentROI)
     
-    print("calculated cloud coverage values")
+    #print("calculated cloud coverage values")
 
     return img
 
@@ -216,7 +245,7 @@ def computeQualityScore(img):
 
     score = score.multiply(-1)
     
-    print("computed quality score")
+    #print("computed quality score")
 
     return img.addBands(score.rename('cloudShadowScore'))
 
