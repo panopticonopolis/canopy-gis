@@ -37,7 +37,7 @@ sensors:
       - transmitterReceiverPolarisation: {'listContains': 'VH'}
 
 data_list:
-  - name: ['dynamic_date_range_v3_secondary_sort']
+  - name: ['v10_secondary_sort_no_dynamic_date_range']
     start_date: '2019-01-01'
     end_date: '2020-12-31'
     geometry: point

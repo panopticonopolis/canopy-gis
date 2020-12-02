@@ -73,6 +73,8 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 	## Originally this was range(1, n_features), but we're pretty sure
 	## that should be 0 so we changed it.
 	for i in range(0, n_features):
+		polygon_id = i+1
+
 		feature_point = ee.Feature( feature_list.get(i) )
 
 		#if source['geometry'] == "point":
@@ -124,19 +126,29 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 
 		# task_queue.add_task(task_params, blocking=True)
 
+		date_range = {
+			'start_date': source['start_date'],
+			'end_date': source['end_date'],
+			'original_date': '<preset date>',
+			'day_offset': '<preset date>',
+			'area': '<preset date>'
+		}
+
 		export = export_single_feature(
 			roi=roi,
 			sensor=sensor,
-			date_range={'start_date': source['start_date'], 'end_date': source['end_date']},
+			date_range=date_range,
 			export_params=export_params,
-			sort_by=pre_mosaic_sort
+			sort_by=pre_mosaic_sort,
+			polygon_id=polygon_id,
+			skip_test=True
 		)
 
 		exports.append(export)
 
 	return exports
 
-def process_datasource_custom_daterange(source, sensor, export_folder, feature_list = None, date_range_list=[], pre_mosaic_sort='CLOUDY_PIXEL_PERCENTAGE'):
+def process_datasource_custom_daterange(source, sensor, export_folder, feature_list = None, date_range_list=[], pre_mosaic_sort='CLOUDY_PIXEL_PERCENTAGE', area_limit=1000):
 # 	feature_list = ee.FeatureCollection(source['features_src'])
 	feature_list = feature_list.sort(source['sort_by']).toList(feature_list.size())
 	n_features = feature_list.size().getInfo()
@@ -212,14 +224,16 @@ def process_datasource_custom_daterange(source, sensor, export_folder, feature_l
 			date_range=date_range,
 			export_params=export_params,
 			sort_by=pre_mosaic_sort,
-			polygon_id=polygon_id
+			polygon_id=polygon_id,
+			area_limit=area_limit,
+			skip_test=False
 		)
 
 		exports.append(export)
 
 	return exports
 
-def export_single_feature(roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PIXEL_PERCENTAGE', polygon_id=None):
+def export_single_feature(roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PIXEL_PERCENTAGE', polygon_id=None, area_limit=1000, skip_test=True):
 	modifiers = []
 	if sensor['name'].lower() == "copernicus/s2_sr":
 		#print('Inject B10')
@@ -233,6 +247,8 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 	#print('Modifiers:', modifiers)
 	roi_ee = ee.Geometry.Polygon(roi[0])
 	imgC = makeImageCollection(sensor, roi_ee, date_range['start_date'], date_range['end_date'], modifiers=modifiers)
+
+	#print(f'Size of polygon {polygon_id}: {imgC.size().getInfo()}')
 	# print(imgC.size().getInfo())
 	# return None
 	## sort was not in the original version
@@ -241,7 +257,9 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 	## changing to the JS version
 	## img = image_collection.mosaic().clip(roi_ee)
 
-	if date_range['day_offset'] == 'two years':
+	if skip_test is True:
+		cloudFree = mergeCollection(imgC, polygon_id=polygon_id, date_range=date_range, test_coll=False)
+	elif (date_range['day_offset'] == 'two years') or (date_range['area'] >= area_limit):
 		# If we're pulling from two years, we'll end the dynamic date range loop and just have
 		# this collection be the final one.
 		cloudFree = mergeCollection(imgC, polygon_id=polygon_id, date_range=date_range, test_coll=False)
@@ -252,6 +270,7 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 
 	if cloudFree is None:
 		original_date = date_range['original_date']
+		area = date_range['area']
 		day_offset = date_range['day_offset']
 
 		offset_dict = {
@@ -277,7 +296,8 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 			'start_date': start_date,
 			'end_date': end_date,
 			'original_date': original_date,
-			'day_offset': new_offset
+			'day_offset': new_offset,
+			'area': area
 		}
 
 		return export_single_feature(
@@ -302,7 +322,7 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		new_params['roi'] = roi
 		new_params['sensor_name'] = sensor['name'].lower()
 		
-		# return exportImageToGCS(**new_params)
+		return exportImageToGCS(**new_params)
 
 def _serialise_task_log(task_log):
 	for k,v in task_log.items():
