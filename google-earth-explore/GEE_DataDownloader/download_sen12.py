@@ -362,8 +362,7 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		new_params['roi'] = roi
 		new_params['sensor_name'] = sensor['name'].lower()
 		
-		return None
-		# return exportImageToGCS(**new_params)
+		return exportImageToGCS(**new_params)
 
 def _serialise_task_log(task_log):
 	for k,v in task_log.items():

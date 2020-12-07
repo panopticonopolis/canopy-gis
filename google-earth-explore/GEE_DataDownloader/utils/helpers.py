@@ -77,6 +77,7 @@ def exportImageToGDrive(img=None, roi=None, drive_folder=None, filename=None, de
         'driveFileNamePrefix': dest_path,
         'driveFolder': drive_folder,
         'maxPixels': 1e13,
+        'fileDimensions': 10
     }
 
     export = ee.batch.Export.image(img, filename, downConfig)
