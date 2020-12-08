@@ -273,10 +273,14 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		area = date_range['area']
 		day_offset = date_range['day_offset']
 
+		# offset_dict = {
+		# 	45: 90,
+		# 	90: 180,
+		# 	180: 'two years'
+		# }
+
 		offset_dict = {
-			45: 90,
-			90: 180,
-			180: 'two years'
+			30: 'two years'
 		}
 
 		new_offset = offset_dict[day_offset]
