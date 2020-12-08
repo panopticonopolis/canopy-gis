@@ -182,6 +182,7 @@ def process_datasource_custom_daterange(
 	#task_list = []
 
 	exports = []
+	exceptions = []
 
 	if isinstance(source['name'], str):
 		source['name'] = [source['name']]
@@ -244,21 +245,47 @@ def process_datasource_custom_daterange(
 
 		date_range = date_range_list[i]
 
-		export = export_single_feature(
-			roi=roi,
-			sensor=sensor,
-			date_range=date_range,
-			export_params=export_params,
-			sort_by=pre_mosaic_sort,
-			polygon_id=polygon_id,
-			area_limit=area_limit,
-			skip_test=False,
-			tile=tile
-		)
+		params = {
+			'roi': roi,
+			'sensor': sensor,
+			'date_range': date_range,
+			'export_params': export_params,
+			'sort_by': pre_mosaic_sort,
+			'polygon_id': polygon_id,
+			'area_limit': area_limit,
+			'skip_test': False,
+			'tile': tile
+		}
 
+		# export = export_single_feature(
+		# 	roi=roi,
+		# 	sensor=sensor,
+		# 	date_range=date_range,
+		# 	export_params=export_params,
+		# 	sort_by=pre_mosaic_sort,
+		# 	polygon_id=polygon_id,
+		# 	area_limit=area_limit,
+		# 	skip_test=False,
+		# 	tile=tile
+		# )
+
+		# exports.append(export)
+
+		export_try_except_loop(params, exports, exceptions)
+
+	return exports, exceptions
+
+def export_try_except_loop(params, exports, exceptions):
+	try:
+		export = export_single_feature(**params)
 		exports.append(export)
+	except Exception as e:
+		print(e)
+		exceptions.append(e)
+		# wait 30 minutes
+		time.sleep(60 * 30)
 
-	return exports
+		export_try_except_loop(params, exports, exceptions)
 
 def export_single_feature(roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PIXEL_PERCENTAGE', polygon_id=None, area_limit=1000, skip_test=True, tile=None):
 	modifiers = []
