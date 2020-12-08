@@ -29,8 +29,8 @@ def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=N
 
     if sensor_name == 'copernicus/s2':
         img = img.select(['B4', 'B3', 'B2'])
-    # elif sensor_name == 'copernicus/s2_sr':
-    #     img = img.select(['TCI_R', 'TCI_G', 'TCI_B'])
+    elif sensor_name == 'copernicus/s2_sr':
+        img = img.select(['TCI_R', 'TCI_G', 'TCI_B'])
         
 #     print(img.getInfo())
 

@@ -280,7 +280,7 @@ def export_try_except_loop(params, exports, exceptions):
 		export = export_single_feature(**params)
 		exports.append(export)
 	except Exception as e:
-		print(e)
+		print('Exception:', e)
 		exceptions.append(e)
 		# wait 30 minutes
 		time.sleep(60 * 30)
@@ -393,7 +393,7 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		## make NDVI band
 		ndvi = cloudFree.normalizedDifference(['B8', 'B4']).rename('NDVI')
 		cloudFree = cloudFree.addBands(ndvi)
-		cloudFree = cloudFree.float()
+		#cloudFree = cloudFree.float()
 
 		new_params = export_params.copy()
 		new_params['img'] = cloudFree
