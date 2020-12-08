@@ -159,9 +159,9 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 	return exports
 
 def process_datasource_custom_daterange(
-	source, sensor, export_folder, polygons,
+	source, sensor, export_folder, polygons, offset_dict,
 	date_range_list=[], pre_mosaic_sort='CLOUDY_PIXEL_PERCENTAGE',
-	area_limit=1000, limit=None
+	area_limit=1000, limit=None, minutes_to_wait=60
 ):
 # 	feature_list = ee.FeatureCollection(source['features_src'])
 	if type(polygons) is dict:
@@ -254,7 +254,8 @@ def process_datasource_custom_daterange(
 			'polygon_id': polygon_id,
 			'area_limit': area_limit,
 			'skip_test': False,
-			'tile': tile
+			'tile': tile,
+			'offset_dict': offset_dict
 		}
 
 		# export = export_single_feature(
@@ -271,23 +272,24 @@ def process_datasource_custom_daterange(
 
 		# exports.append(export)
 
-		export_try_except_loop(params, exports, exceptions)
+		export_try_except_loop(params, minutes_to_wait, exports, exceptions)
 
 	return exports, exceptions
 
-def export_try_except_loop(params, exports, exceptions):
+def export_try_except_loop(params, minutes_to_wait, exports, exceptions):
 	try:
 		export = export_single_feature(**params)
 		exports.append(export)
 	except Exception as e:
 		print('Exception:', e)
+		print(f'Please wait for {minutes_to_wait} minutes')
 		exceptions.append(e)
 		# wait 30 minutes
-		time.sleep(60 * 30)
+		time.sleep(60 * minutes_to_wait)
 
-		export_try_except_loop(params, exports, exceptions)
+		export_try_except_loop(params, minutes_to_wait, exports, exceptions)
 
-def export_single_feature(roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PIXEL_PERCENTAGE', polygon_id=None, area_limit=1000, skip_test=True, tile=None):
+def export_single_feature(offset_dict, roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PIXEL_PERCENTAGE', polygon_id=None, area_limit=1000, skip_test=True, tile=None):
 	modifiers = []
 	if sensor['name'].lower() == "copernicus/s2_sr":
 		#print('Inject B10')
@@ -328,11 +330,11 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		area = date_range['area']
 		day_offset = date_range['day_offset']
 
-		offset_dict = {
-			45: 90,
-			90: 180,
-			180: 'two years'
-		}
+		# offset_dict = {
+		# 	45: 90,
+		# 	90: 180,
+		# 	180: 'two years'
+		# }
 
 		# offset_dict = {
 		# 	30: 'two years'
@@ -363,6 +365,7 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		}
 
 		return export_single_feature(
+					offset_dict=offset_dict,
 					roi=roi,
 					sensor=sensor,
 					date_range=new_date_range,
@@ -399,6 +402,7 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		new_params['img'] = cloudFree
 		new_params['roi'] = roi
 		new_params['sensor_name'] = sensor['name'].lower()
+		new_params['bands'] = sensor['bands']
 		
 		return exportImageToGCS(**new_params)
 

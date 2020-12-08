@@ -24,13 +24,15 @@ def exportImageCollectionToGCS(imgC, bucket=None, resolution=10, start=False):
 
     return(task_ids)
 
-def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=None, resolution=10, start=True, sensor_name=None):
+def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=None, resolution=10, start=True, sensor_name=None, bands=None):
     ## same as in the JS version
 
-    if sensor_name == 'copernicus/s2':
-        img = img.select(['B4', 'B3', 'B2'])
-    elif sensor_name == 'copernicus/s2_sr':
-        img = img.select(['B2','B3','B4','B8','B8A','TCI_R','TCI_G','TCI_B','NDVI'])
+    # if sensor_name == 'copernicus/s2':
+    #     img = img.select(['B4', 'B3', 'B2'])
+    # elif sensor_name == 'copernicus/s2_sr':
+    #     img = img.select(['B2','B3','B4','B8','B8A','TCI_R','TCI_G','TCI_B','NDVI'])
+
+    img = img.select(bands)
         
 #     print(img.getInfo())
 
