@@ -328,15 +328,15 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		area = date_range['area']
 		day_offset = date_range['day_offset']
 
-		# offset_dict = {
-		# 	45: 90,
-		# 	90: 180,
-		# 	180: 'two years'
-		# }
-
 		offset_dict = {
-			30: 'two years'
+			45: 90,
+			90: 180,
+			180: 'two years'
 		}
+
+		# offset_dict = {
+		# 	30: 'two years'
+		# }
 
 		new_offset = offset_dict[day_offset]
 
@@ -393,7 +393,7 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		## make NDVI band
 		ndvi = cloudFree.normalizedDifference(['B8', 'B4']).rename('NDVI')
 		cloudFree = cloudFree.addBands(ndvi)
-		#cloudFree = cloudFree.float()
+		cloudFree = cloudFree.float()
 
 		new_params = export_params.copy()
 		new_params['img'] = cloudFree
