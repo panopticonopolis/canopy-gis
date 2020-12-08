@@ -29,8 +29,8 @@ def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=N
 
     if sensor_name == 'copernicus/s2':
         img = img.select(['B4', 'B3', 'B2'])
-    elif sensor_name == 'copernicus/s2_sr':
-        img = img.select(['TCI_R', 'TCI_G', 'TCI_B'])
+    # elif sensor_name == 'copernicus/s2_sr':
+    #     img = img.select(['TCI_R', 'TCI_G', 'TCI_B'])
         
 #     print(img.getInfo())
 
@@ -76,8 +76,7 @@ def exportImageToGDrive(img=None, roi=None, drive_folder=None, filename=None, de
         'region': roi,
         'driveFileNamePrefix': dest_path,
         'driveFolder': drive_folder,
-        'maxPixels': 1e13,
-        'fileDimensions': 10
+        'maxPixels': 1e13
     }
 
     export = ee.batch.Export.image(img, filename, downConfig)

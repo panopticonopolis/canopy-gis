@@ -43,11 +43,11 @@ def makeImageCollection(sensor, roi, start_date, end_date, modifiers=[], tile=No
 				.filterBounds(roi)
 
 	if tile is None:
-		print('clipping in makeImageCollection')
+		#print('clipping in makeImageCollection')
 		## If we're doing a feature collection
 		collection = collection.map( lambda x: clipToROI(x, ee.Geometry(roi)) )
 	else:
-		print('not clipping in makeImageCollection')
+		#print('not clipping in makeImageCollection')
 		## If we're doing it by tile
 		collection = collection.filterMetadata(
 			'system:index', 'contains', tile
@@ -202,6 +202,8 @@ def process_datasource_custom_daterange(
 	for i in range(0, limit):
 		polygon_id = i + 1
 
+		print(f'processing polygon {polygon_id} of {limit}')
+
 		if polygons_are_tiles:
 			tile = tile_list[i]
 			roi = json.loads(polygons[tile]['Polygon'])
@@ -216,7 +218,7 @@ def process_datasource_custom_daterange(
 
 		time_stamp = "_".join(time.ctime().split(" ")[1:])
 		filename = "_".join([str(polygon_id)] + source['name'] + [time_stamp])
-		print("processing ",filename)
+		# print("processing ",filename)
 		dest_path = "/".join(filename_parts + [filename])
 
 		export_params = {
@@ -268,7 +270,7 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		modifiers += [sentinel2CloudScore, calcCloudCoverage, sentinel2ProjectShadows, computeQualityScore]
 		#print(modifiers)
                     
-	print(f'Tile is {tile}')
+	#print(f'Tile is {tile}')
 
 	roi_ee = ee.Geometry.Polygon(roi)
 
@@ -299,10 +301,14 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		area = date_range['area']
 		day_offset = date_range['day_offset']
 
+		# offset_dict = {
+		# 	45: 90,
+		# 	90: 180,
+		# 	180: 'two years'
+		# }
+
 		offset_dict = {
-			45: 90,
-			90: 180,
-			180: 'two years'
+			30: 'two years'
 		}
 
 		new_offset = offset_dict[day_offset]
@@ -316,10 +322,10 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 			start_date = str(start)[:10]
 			end_date = str(end)[:10]
 
-		if tile is None:
-			print(f'Polygon {polygon_id} is increasing offset to {new_offset}')
-		else:
-			print(f'Tile {tile} is increasing offset to {new_offset}')
+		# if tile is None:
+		# 	print(f'Polygon {polygon_id} is increasing offset to {new_offset}')
+		# else:
+		# 	print(f'Tile {tile} is increasing offset to {new_offset}')
 
 		new_date_range = {
 			'start_date': start_date,
@@ -340,22 +346,26 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 				)
 
 	else:
-		if tile is None:
-			print(f'Polygon {polygon_id} successfully merged with offset {date_range["day_offset"]}')
-		else:
-			print(f'Tile {tile} successfully merged with offset {date_range["day_offset"]}')
+		# if tile is None:
+		# 	print(f'Polygon {polygon_id} successfully merged with offset {date_range["day_offset"]}')
+		# else:
+		# 	print(f'Tile {tile} successfully merged with offset {date_range["day_offset"]}')
 
 		if tile is None:
 			## when doing a feature collection
-			print('clipping to ROI in export_single_feature')
+			# print('clipping to ROI in export_single_feature')
 			cloudFree = cloudFree.clip(roi_ee).reproject('EPSG:4326', None, 10)
 		else:
 			## when doing tile by tile
-			print('not clipping in export_single_feature')
+			# print('not clipping in export_single_feature')
 			cloudFree = cloudFree.reproject('EPSG:4326', None, 10)
 		## Do we need to mosaic it now???
 		# print('cloudFree info:', cloudFree.getInfo())
 		# print('Mosaic type:', type(img))
+
+		## make NDVI band
+		ndvi = cloudFree.normalizedDifference(['B8', 'B4']).rename('NDVI')
+		cloudFree = cloudFree.addBands(ndvi)
 
 		new_params = export_params.copy()
 		new_params['img'] = cloudFree

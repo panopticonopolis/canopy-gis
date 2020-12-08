@@ -37,7 +37,7 @@ sensors:
       - transmitterReceiverPolarisation: {'listContains': 'VH'}
 
 data_list:
-  - name: ['test_export_chipping']
+  - name: ['full_basin_export_v1']
     start_date: '2019-01-01'
     end_date: '2020-12-31'
     geometry: point

@@ -64,10 +64,10 @@ def image_collection_secondary_sort(col,primary_sort=None,secondary_sort=None):
     
 
     new_sort_dic = {}
-    print('secondary sort -- getting infos')
+    #print('secondary sort -- getting infos')
     for key in sort_dic:
         new_sort_dic[key] = sort_dic[key].getInfo()
-        print(f'got info for {key}')
+        #print(f'got info for {key}')
         
     df = pd.DataFrame(new_sort_dic)
     
