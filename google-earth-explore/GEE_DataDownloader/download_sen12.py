@@ -34,14 +34,24 @@ def makeFilterList(sensor):
 
 	return filters_before, filters_after
 
-def makeImageCollection(sensor, roi, start_date, end_date, modifiers=[]):
+def makeImageCollection(sensor, roi, start_date, end_date, modifiers=[], tile=None):
 	filters_before, filters_after = makeFilterList(sensor)
 	#print(modifiers)
 
 	collection = ee.ImageCollection(sensor['name']) \
 				.filterDate(ee.Date(start_date), ee.Date(end_date)) \
-				.filterBounds(roi) \
-				.map( lambda x: clipToROI(x, ee.Geometry(roi)) )
+				.filterBounds(roi)
+
+	if tile is None:
+		print('clipping in makeImageCollection')
+		## If we're doing a feature collection
+		collection = collection.map( lambda x: clipToROI(x, ee.Geometry(roi)) )
+	else:
+		print('not clipping in makeImageCollection')
+		## If we're doing it by tile
+		collection = collection.filterMetadata(
+			'system:index', 'contains', tile
+		)
     
 	#print("size of collection:",collection.size().getInfo())
 
@@ -148,47 +158,61 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 
 	return exports
 
-def process_datasource_custom_daterange(source, sensor, export_folder, feature_list = None, date_range_list=[], pre_mosaic_sort='CLOUDY_PIXEL_PERCENTAGE', area_limit=1000):
+def process_datasource_custom_daterange(
+	source, sensor, export_folder, polygons,
+	date_range_list=[], pre_mosaic_sort='CLOUDY_PIXEL_PERCENTAGE',
+	area_limit=1000, limit=None
+):
 # 	feature_list = ee.FeatureCollection(source['features_src'])
-	feature_list = feature_list.sort(source['sort_by']).toList(feature_list.size())
-	n_features = feature_list.size().getInfo()
+	if type(polygons) is dict:
+		polygons_are_tiles = True
+		tile_list = list(polygons.keys())
+		n_polygons = len(tile_list)
+		print(f'{n_polygons} tiles have been loaded')
 
-	print("{} features have been loaded".format(n_features))
+	elif type(polygons) is ee.featurecollection.FeatureCollection:
+		polygons_are_tiles = False
+		feature_list = polygons.sort(source['sort_by']).toList(polygons.size())
+		n_polygons = feature_list.size().getInfo()
+		print(f"{n_polygons} features have been loaded")
+
+	else:
+		raise ValueError('"polygons" must be a hash table or a feature collection')
 
 	#task_list = []
 
 	exports = []
 
+	if isinstance(source['name'], str):
+		source['name'] = [source['name']]
+
+	if 'prefix' in sensor:
+		if isinstance(sensor['prefix'], str):
+			sensor['prefix'] = [sensor['prefix']]
+		filename_parts = sensor['prefix'] + source['name']
+	else:
+		filename_parts = source['name']
+
+	if not limit:
+		limit = n_polygons
+
 	### ERROR? ###
 	## Originally this was range(1, n_features), but we're pretty sure
 	## that should be 0 so we changed it.
-	for i in range(0, n_features):
+	for i in range(0, limit):
 		polygon_id = i + 1
 
-		feature_point = ee.Feature( feature_list.get(i) )
+		if polygons_are_tiles:
+			tile = tile_list[i]
+			roi = json.loads(polygons[tile]['Polygon'])
+		else:
+			feature_point = ee.Feature( feature_list.get(i) )
+			roi = feature_point.geometry()
+			roi = roi.coordinates().getInfo()[0]
+			tile = None
 
 		#if source['geometry'] == "point":
 		#	feature_point = feature_point.buffer(source['size']).bounds()
-
-		roi = feature_point.geometry()
-		roi = roi.coordinates().getInfo()
-
-		### should be done outside the for loop ###
-		if isinstance(source['name'], str):
-			source['name'] = [source['name']]
-
-		### ERROR? ###
-		## The following conditional should be moved under
-		## the conditional after it, or else we'll error out
-		## if sensor doesn't have a "prefix" key.
-		if isinstance(sensor['prefix'], str):
-			sensor['prefix'] = [sensor['prefix']]
-
-		if 'prefix' in sensor:
-			filename_parts = sensor['prefix'] + source['name']
-		else:
-			filename_parts = source['name']
-		### end of part that should be done outside the for loop ###
 
 		time_stamp = "_".join(time.ctime().split(" ")[1:])
 		filename = "_".join([str(polygon_id)] + source['name'] + [time_stamp])
@@ -226,14 +250,15 @@ def process_datasource_custom_daterange(source, sensor, export_folder, feature_l
 			sort_by=pre_mosaic_sort,
 			polygon_id=polygon_id,
 			area_limit=area_limit,
-			skip_test=False
+			skip_test=False,
+			tile=tile
 		)
 
 		exports.append(export)
 
 	return exports
 
-def export_single_feature(roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PIXEL_PERCENTAGE', polygon_id=None, area_limit=1000, skip_test=True):
+def export_single_feature(roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PIXEL_PERCENTAGE', polygon_id=None, area_limit=1000, skip_test=True, tile=None):
 	modifiers = []
 	if sensor['name'].lower() == "copernicus/s2_sr":
 		#print('Inject B10')
@@ -243,10 +268,11 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		modifiers += [sentinel2CloudScore, calcCloudCoverage, sentinel2ProjectShadows, computeQualityScore]
 		#print(modifiers)
                     
+	print(f'Tile is {tile}')
 
-	#print('Modifiers:', modifiers)
-	roi_ee = ee.Geometry.Polygon(roi[0])
-	imgC = makeImageCollection(sensor, roi_ee, date_range['start_date'], date_range['end_date'], modifiers=modifiers)
+	roi_ee = ee.Geometry.Polygon(roi)
+
+	imgC = makeImageCollection(sensor, roi_ee, date_range['start_date'], date_range['end_date'], modifiers=modifiers, tile=tile)
 
 	#print(f'Size of polygon {polygon_id}: {imgC.size().getInfo()}')
 	# print(imgC.size().getInfo())
@@ -294,7 +320,10 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 			start_date = str(start)[:10]
 			end_date = str(end)[:10]
 
-		print(f'Polygon {polygon_id} is increasing offset to {new_offset}')
+		if tile is None:
+			print(f'Polygon {polygon_id} is increasing offset to {new_offset}')
+		else:
+			print(f'Tile {tile} is increasing offset to {new_offset}')
 
 		new_date_range = {
 			'start_date': start_date,
@@ -310,13 +339,24 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 					date_range=new_date_range,
 					export_params=export_params,
 					sort_by=sort_by,
-					polygon_id=polygon_id
+					polygon_id=polygon_id,
+					tile=tile
 				)
 
 	else:
-		print(f'Polygon {polygon_id} successfully merged with offset {date_range["day_offset"]}')
+		if tile is None:
+			print(f'Polygon {polygon_id} successfully merged with offset {date_range["day_offset"]}')
+		else:
+			print(f'Tile {tile} successfully merged with offset {date_range["day_offset"]}')
 
-		cloudFree = cloudFree.clip(roi_ee).reproject('EPSG:4326', None, 10)
+		if tile is None:
+			## when doing a feature collection
+			print('clipping to ROI in export_single_feature')
+			cloudFree = cloudFree.clip(roi_ee).reproject('EPSG:4326', None, 10)
+		else:
+			## when doing tile by tile
+			print('not clipping in export_single_feature')
+			cloudFree = cloudFree.reproject('EPSG:4326', None, 10)
 		## Do we need to mosaic it now???
 		# print('cloudFree info:', cloudFree.getInfo())
 		# print('Mosaic type:', type(img))
