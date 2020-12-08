@@ -161,7 +161,7 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 def process_datasource_custom_daterange(
 	source, sensor, export_folder, polygons, offset_dict,
 	date_range_list=[], pre_mosaic_sort='CLOUDY_PIXEL_PERCENTAGE',
-	area_limit=1000, limit=None, minutes_to_wait=60
+	area_limit=1000, loop_start=0, limit=None, minutes_to_wait=60
 ):
 # 	feature_list = ee.FeatureCollection(source['features_src'])
 	if type(polygons) is dict:
@@ -200,7 +200,7 @@ def process_datasource_custom_daterange(
 	### ERROR? ###
 	## Originally this was range(1, n_features), but we're pretty sure
 	## that should be 0 so we changed it.
-	for i in range(0, limit):
+	for i in range(loop_start, limit):
 		polygon_id = i + 1
 
 		print(f'processing polygon {polygon_id} of {limit}')
