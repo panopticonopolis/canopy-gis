@@ -393,6 +393,7 @@ def export_single_feature(roi=None, sensor=None, date_range=None, export_params=
 		## make NDVI band
 		ndvi = cloudFree.normalizedDifference(['B8', 'B4']).rename('NDVI')
 		cloudFree = cloudFree.addBands(ndvi)
+		cloudFree = cloudFree.float()
 
 		new_params = export_params.copy()
 		new_params['img'] = cloudFree
