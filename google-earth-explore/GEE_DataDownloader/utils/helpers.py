@@ -125,7 +125,8 @@ def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE',secondary_s
         if not coll_is_good:
             return None
     
-    best_sorted = image_collection_secondary_sort(best,primary_sort=filterBy,secondary_sort=secondary_sort)
+    # best_sorted = image_collection_secondary_sort(best,primary_sort=filterBy,secondary_sort=secondary_sort)
+    best_sorted = best.sort(secondary_sort).sort(filterBy)
 
     # logging.info(f'Best size: {best.size().getInfo()}')
 

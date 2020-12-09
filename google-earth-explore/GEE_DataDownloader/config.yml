@@ -44,7 +44,7 @@ sensors:
       - transmitterReceiverPolarisation: {'listContains': 'VH'}
 
 data_list:
-  - name: ['full_basin_export_v1_zhenya']
+  - name: ['misha_polygons_final_version']
     start_date: '2019-01-01'
     end_date: '2020-12-31'
     geometry: point
