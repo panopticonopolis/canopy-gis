@@ -273,6 +273,8 @@ def process_datasource_custom_daterange(
 		# exports.append(export)
 
 		export_try_except_loop(params, minutes_to_wait, exports, exceptions)
+		print(f'Polygon {polygon_id} processed; please wait')
+		time.sleep(30)
 
 	return exports, exceptions
 
