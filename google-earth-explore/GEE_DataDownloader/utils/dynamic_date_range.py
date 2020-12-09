@@ -54,13 +54,17 @@ def image_collection_secondary_sort(col,primary_sort=None,secondary_sort=None):
     new_list_of_images = []
     primary_list = col.aggregate_array(primary_sort)
     secondary_list = col.aggregate_array(secondary_sort)
-    image_id_list = col.aggregate_array('system:index')
+    # image_id_list = col.aggregate_array('system:index')
     
     
+    # sort_dic = \
+    # {primary_sort:primary_list,
+    #  secondary_sort:secondary_list,
+    #  "id":image_id_list}
+
     sort_dic = \
     {primary_sort:primary_list,
-     secondary_sort:secondary_list,
-     "id":image_id_list}
+     secondary_sort:secondary_list}
     
 
     new_sort_dic = {}
