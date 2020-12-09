@@ -11,6 +11,12 @@ from utils import GEETaskManager
 from utils import collection_greater_than
 
 from gevent.fileobject import FileObjectThread
+import logging
+
+
+LOG_FILENAME = 'full_basin_export_history.log'
+logging.basicConfig(filename=LOG_FILENAME,level=logging.INFO)
+
 
 def makeFilterList(sensor):
 	filters_before = None
@@ -161,7 +167,7 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 def process_datasource_custom_daterange(
 	source, sensor, export_folder, polygons, offset_dict,
 	date_range_list=[], pre_mosaic_sort='CLOUDY_PIXEL_PERCENTAGE',
-	area_limit=1000, loop_start=0, limit=None, minutes_to_wait=60
+	area_limit=1000, loop_start=0, limit=None, minutes_to_wait=60, debug=False
 ):
 # 	feature_list = ee.FeatureCollection(source['features_src'])
 	if type(polygons) is dict:
@@ -272,24 +278,31 @@ def process_datasource_custom_daterange(
 
 		# exports.append(export)
 
-		export_try_except_loop(params, minutes_to_wait, exports, exceptions)
+		export_try_except_loop(params, minutes_to_wait, exports, exceptions, 0, debug)
 		# print(f'Polygon {polygon_id} processed; please wait')
 		# time.sleep(30)
+		if debug:
+			logging_timestamp = "_".join(time.ctime().split(" ")[1:])
+			logging.info(f'{logging_timestamp}: Polygon {polygon_id} successfully processed')
 
 	return exports, exceptions
 
-def export_try_except_loop(params, minutes_to_wait, exports, exceptions):
+def export_try_except_loop(params, minutes_to_wait, exports, exceptions, attempts, debug=False):
 	try:
 		export = export_single_feature(**params)
 		exports.append(export)
 	except Exception as e:
+		if debug:
+			attempts += 1
+			logging_timestamp = "_".join(time.ctime().split(" ")[1:])
+			logging.info(f'{logging_timestamp}: Timeout #{attempts}; retrying in {minutes_to_wait} minutes')
 		print('Exception:', e)
 		print(f'Please wait for {minutes_to_wait} minutes')
 		exceptions.append(e)
 		# wait 30 minutes
 		time.sleep(60 * minutes_to_wait)
 
-		export_try_except_loop(params, minutes_to_wait, exports, exceptions)
+		export_try_except_loop(params, minutes_to_wait, exports, exceptions, attempts)
 
 def export_single_feature(offset_dict, roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PIXEL_PERCENTAGE', polygon_id=None, area_limit=1000, skip_test=True, tile=None):
 	modifiers = []
@@ -318,7 +331,7 @@ def export_single_feature(offset_dict, roi=None, sensor=None, date_range=None, e
 
 	if skip_test is True:
 		cloudFree = mergeCollection(imgC, polygon_id=polygon_id, date_range=date_range, test_coll=False)
-	elif (date_range['day_offset'] == 'two years') or (date_range['area'] >= area_limit):
+	elif (date_range['day_offset'] == 'two years'): #or (date_range['area'] >= area_limit)
 		# If we're pulling from two years, we'll end the dynamic date range loop and just have
 		# this collection be the final one.
 		cloudFree = mergeCollection(imgC, polygon_id=polygon_id, date_range=date_range, test_coll=False)
