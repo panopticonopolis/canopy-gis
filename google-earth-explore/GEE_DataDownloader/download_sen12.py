@@ -209,7 +209,7 @@ def process_datasource_custom_daterange(
 	for i in range(loop_start, limit):
 		polygon_id = i + 1
 
-		print(f'processing polygon {polygon_id} of {limit}')
+		print(f'processing polygon {polygon_id} of {limit}', end='\r', flush=True)
 
 		if polygons_are_tiles:
 			tile = tile_list[i]
@@ -296,8 +296,7 @@ def export_try_except_loop(params, minutes_to_wait, exports, exceptions, attempt
 			attempts += 1
 			logging_timestamp = "_".join(time.ctime().split(" ")[1:])
 			logging.info(f'{logging_timestamp}: Timeout #{attempts}; retrying in {minutes_to_wait} minutes')
-		print('Exception:', e)
-		print(f'Please wait for {minutes_to_wait} minutes')
+		print(f'{e}; please wait for {minutes_to_wait} minutes', end='\r', flush=True)
 		exceptions.append(e)
 		# wait 30 minutes
 		time.sleep(60 * minutes_to_wait)
@@ -387,7 +386,8 @@ def export_single_feature(offset_dict, roi=None, sensor=None, date_range=None, e
 					export_params=export_params,
 					sort_by=sort_by,
 					polygon_id=polygon_id,
-					tile=tile
+					tile=tile,
+					skip_test=False
 				)
 
 	else:

@@ -3,8 +3,8 @@ from .dynamic_date_range import collection_greater_than,image_collection_seconda
 import logging
 
 
-LOG_FILENAME = 'collection_sizes.log'
-logging.basicConfig(filename=LOG_FILENAME,level=logging.INFO)
+# LOG_FILENAME = 'collection_sizes.log'
+# logging.basicConfig(filename=LOG_FILENAME,level=logging.INFO)
 
 
 def exportImageCollectionToGCS(imgC, bucket=None, resolution=10, start=False):
@@ -121,6 +121,8 @@ def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE',secondary_s
     
     if test_coll:
         coll_is_good = collection_greater_than(best, 5)
+
+        # print('Coll is good:', coll_is_good)
 
         if not coll_is_good:
             return None
