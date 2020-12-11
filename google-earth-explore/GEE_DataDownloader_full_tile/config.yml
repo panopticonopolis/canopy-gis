@@ -15,14 +15,7 @@ sensors:
   - name: "COPERNICUS/S2_SR"
     prefix: "S2_CloudFree"
     type: "opt"
-    bands: ['TCI_R', 'TCI_G', 'TCI_B']
-    filters_after:
-      - CLOUDY_PERCENTAGE: {'lte': 10}
-
-  - name: "COPERNICUS/S2_SR"
-    prefix: "S2_CloudFree"
-    type: "opt"
-    bands: ['B2','B3','B4','B8','B8A','TCI_R','TCI_G','TCI_B','NDVI']
+    bands: ['B1','B2','B3','B4','B5','B6','B7','B8','B8A', 'B9','B10', 'B11','B12','TCI_R', 'TCI_G', 'TCI_B']
     filters_after:
       - CLOUDY_PERCENTAGE: {'lte': 10}
 
@@ -44,7 +37,7 @@ sensors:
       - transmitterReceiverPolarisation: {'listContains': 'VH'}
 
 data_list:
-  - name: ['full_basin_export_v1']
+  - name: ['dynamic_date_range_v1']
     start_date: '2019-01-01'
     end_date: '2020-12-31'
     geometry: point

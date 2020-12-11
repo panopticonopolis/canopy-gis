@@ -80,6 +80,6 @@ def sentinel2ProjectShadows(
     image = image.addBands(shadowScore.rename(['shadowScore']))
 
 
-    #print("completed shadow score")
+    print("completed shadow score")
 
     return image

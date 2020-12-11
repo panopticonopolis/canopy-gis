@@ -1,11 +1,4 @@
 import ee
-from .dynamic_date_range import collection_greater_than,image_collection_secondary_sort
-import logging
-
-
-# LOG_FILENAME = 'collection_sizes.log'
-# logging.basicConfig(filename=LOG_FILENAME,level=logging.INFO)
-
 
 def exportImageCollectionToGCS(imgC, bucket=None, resolution=10, start=False):
     task_ids = {}
@@ -24,15 +17,13 @@ def exportImageCollectionToGCS(imgC, bucket=None, resolution=10, start=False):
 
     return(task_ids)
 
-def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=None, resolution=10, start=True, sensor_name=None, bands=None):
+def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=None, resolution=10, start=True, sensor_name=None):
     ## same as in the JS version
 
-    # if sensor_name == 'copernicus/s2':
-    #     img = img.select(['B4', 'B3', 'B2'])
-    # elif sensor_name == 'copernicus/s2_sr':
-    #     img = img.select(['B2','B3','B4','B8','B8A','TCI_R','TCI_G','TCI_B','NDVI'])
-
-    img = img.select(bands)
+    if sensor_name == 'copernicus/s2':
+        img = img.select(['B4', 'B3', 'B2'])
+    elif sensor_name == 'copernicus/s2_sr':
+        img = img.select(['TCI_R', 'TCI_G', 'TCI_B'])
         
 #     print(img.getInfo())
 
@@ -40,7 +31,7 @@ def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=N
       image=img,
       description=filename,
       scale=resolution,
-      region=roi,
+      #region=roi,
       fileNamePrefix=dest_path,
       bucket=bucket,
       maxPixels=1e13
@@ -78,7 +69,7 @@ def exportImageToGDrive(img=None, roi=None, drive_folder=None, filename=None, de
         'region': roi,
         'driveFileNamePrefix': dest_path,
         'driveFolder': drive_folder,
-        'maxPixels': 1e13
+        'maxPixels': 1e13,
     }
 
     export = ee.batch.Export.image(img, filename, downConfig)
@@ -110,42 +101,17 @@ def dilatedErossion(score, dilationPixels=3, erodePixels=1.5):
 #              threshBest - A threshold percentage to select the best image. This image is used directly as "cloudFree" if one exists.
 #        output: A single cloud free mosaic for the region of interest
 
-def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE',secondary_sort='CLOUDY_PIXEL_PERCENTAGE' ,filterType='less_than', mosaicBy='cloudShadowScore', polygon_id=None, date_range=None, test_coll=False):
+def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE', filterType='less_than', mosaicBy='cloudShadowScore'):
     # Select the best images, which are below the cloud free threshold, sort them in reverse order (worst on top) for mosaicing
     ## same as the JS version
-    # logging.info(f'---POLYGON {polygon_id}---')
-    # logging.info(f'{date_range["start_date"]} to {date_range["end_date"]}')
-    # logging.info(f'Collection size: {imgC.size().getInfo()}')
-
-    best = imgC.filterMetadata(filterBy, filterType, keepThresh)
-    
-    if test_coll:
-        coll_is_good = collection_greater_than(best, 5)
-
-        # print('Coll is good:', coll_is_good)
-
-        if not coll_is_good:
-            return None
-    
-    # best_sorted = image_collection_secondary_sort(best,primary_sort=filterBy,secondary_sort=secondary_sort)
-    best_sorted = best.sort(secondary_sort, False).sort(filterBy, False)
-
-    # logging.info(f'Best size: {best.size().getInfo()}')
-
-    # best_filtered = best.filterMetadata('NODATA_PIXEL_PERCENTAGE', 'less_than', 10)
-
-    # logging.info(f'Filtered best size: {best_filtered.size().getInfo()}')
-    # logging.info('')
-    # logging.info('')
-
-#     return collection_quality_test_filter(imgC, best)
-#     print('Info on first image of collection:', imgC.first().getInfo())
+    best = imgC.filterMetadata(filterBy, filterType, keepThresh).sort(filterBy, False)
+    #print('Info on first image of collection:', imgC.first().getInfo())
     filtered = imgC.qualityMosaic(mosaicBy)
 
     # Add the quality mosaic to fill in any missing areas of the ROI which aren't covered by good images
-    newC = ee.ImageCollection.fromImages( [filtered, best_sorted.mosaic()] )
+    newC = ee.ImageCollection.fromImages( [filtered, best.mosaic()] )
     
-#     print("collection merged")
+    print("collection merged")
 
     return ee.Image(newC.mosaic())
 
@@ -191,7 +157,33 @@ def calcCloudCoverage(img, cloudThresh=0.2):
     img = img.set('ROI_COVERAGE_PERCENT', coveragePercent)
     img = img.set('CLOUDY_PERCENTAGE_ROI', cloudPercentROI)
     
-    #print("calculated cloud coverage values")
+    print("calculated cloud coverage values")
+
+    return img
+
+def calcCloudCoverageTile(img, cloudThresh=0.2):
+    imgPoly = ee.Algorithms.GeometryConstructors.Polygon(
+        ee.Geometry(img.get('system:footprint')).coordinates()
+    )
+
+    cloudMask = img.select(['cloudScore']).gt(cloudThresh).rename('cloudMask')
+
+    cloudAreaImg = cloudMask.multiply(ee.Image.pixelArea())
+
+    stats = cloudAreaImg.reduceRegion(
+        reducer=ee.Reducer.sum(),
+        scale=10,
+        maxPixels=1e12,
+        bestEffort=True,
+        tileScale=16
+    )
+
+    maxAreaError = 10
+    cloudPercent = ee.Number(stats.get('cloudMask')).divide(imgPoly.area(maxAreaError)).multiply(100)
+
+    img = img.set('CLOUDY_PERCENTAGE', cloudPercent)
+
+    print('Calculated cloudy percentage values')
 
     return img
 
@@ -250,7 +242,7 @@ def computeQualityScore(img):
 
     score = score.multiply(-1)
     
-    #print("computed quality score")
+    print("computed quality score")
 
     return img.addBands(score.rename('cloudShadowScore'))
 

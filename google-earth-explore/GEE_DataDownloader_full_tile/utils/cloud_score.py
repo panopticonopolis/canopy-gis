@@ -46,6 +46,6 @@ def sentinel2CloudScore(img):
         kernel=ee.Kernel.square(5)
       )
     
-    #print("Generated cloud score")
+    print("Generated cloud score")
 
     return img.addBands(score.rename('cloudScore'))

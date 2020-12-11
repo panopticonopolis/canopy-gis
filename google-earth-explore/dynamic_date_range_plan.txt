@@ -1,0 +1,15 @@
+1. Take the "best" collection. Filter by nodata percentage (threshold 10? 5?). Then check the size of the best_filtered collection.
+If its size is >= 1, then it's considered fine and we don't increase the date range. Otherwise, move on to step 2.
+
+
+
+***WHEN TO EXPAND DATE RANGE???***
+
+Option 0: Not change the date range at all
+
+Option 1: Only test the size of the collection, expand date range if size is too small
+
+Option 2: Test the size of the whole collection *and* the "best" collection, expand date range if *both* are too small
+
+Option 3: Filter "best" by no data percentage, test size of that best_filtered collection and the whole collection,
+expand date range if both are too small
