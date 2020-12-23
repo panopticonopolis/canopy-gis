@@ -44,13 +44,13 @@ sensors:
       - transmitterReceiverPolarisation: {'listContains': 'VH'}
 
 data_list:
-  - name: ['full_basin_export_v2']
+  - name: ['full_basin_export_v3']
     start_date: '2019-01-01'
     end_date: '2020-12-31'
     geometry: point
     size: 20000
     resolution: 10
-    sort_by: 'name'
+    sort_by: 'id'
     features_src: "ft:19Vexm10pJcAZ8tTVbl4j0HA8w2muyPPz6-cyvdxI"
     sensors: [0,1,2]
 
