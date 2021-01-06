@@ -206,14 +206,11 @@ class Pipeline:
 		polygon_type = type(self.polygons)
 		if self.polygons is None:
 			raise ValueError('If you input a date_range_list, you must also input polygons')
-		elif type(polygon_type) is dict:
-			tile_list = list(self.polygons.keys())
-			n_polygons = len(tile_list)
 		elif type(polygon_type) is ee.featurecollection.FeatureCollection:
 			feature_list = self.polygons.toList(self.polygons.size())
 			n_polygons = feature_list.size().getInfo()
 		else:
-			raise ValueError(f'Polygons are a {polygon_type}, but they must be a dict or an ee.FeatureCollection')
+			raise ValueError(f'Polygons are a {polygon_type}, but they must be an ee.FeatureCollection')
 
 		if len(self.date_range_list) != n_polygons:
 			raise ValueError('date_range_list and polygons must have the same length')
@@ -256,6 +253,27 @@ class Pipeline:
 				d[value] = off_arr[i+1]
 
 		return d
+
+
+	def _create_filename_parts(self):
+		if isinstance(self.source['name'], str):
+			self.source['name'] = [self.source['name']]
+
+		if 'prefix' in self.sensor:
+			if isinstance(self.sensor['prefix'], str):
+				self.sensor['prefix'] = [self.sensor['prefix']]
+			filename_parts = self.sensor['prefix'] + self.source['name']
+		else:
+			filename_parts = self.source['name']
+
+		return filename_parts
+
+
+	def _get_feature_area(self, feature):
+		stateArea = feature.geometry().area()
+    	stateAreaSqKm = ee.Number(stateArea).divide(1e6).round()
+
+    	return stateAreaSqKm.getInfo()
 
 
 	def load_config(self, config_file):
@@ -357,44 +375,25 @@ class Pipeline:
 
 
 	def process_datasource_custom_daterange(
-		self, offset_dict='default', area_limit=1000, loop_start=0,
-		limit=None, minutes_to_wait=60
+		self, loop_start=0, limit=None, minutes_to_wait=60
 	):
-		source = self.source
-		sensor = self.sensor
-		export_folder = self.export_folder
-		polygons = self.polygons
-		date_range_list = self.date_range_list
-		debug = self.debug
-		if type(polygons) is dict:
-			polygons_are_tiles = True
-			tile_list = list(polygons.keys())
-			n_polygons = len(tile_list)
-			print(f'{n_polygons} tiles have been loaded')
+		# source = self.source
+		# sensor = self.sensor
+		# export_folder = self.export_folder
+		# polygons = self.polygons
+		# date_range_list = self.date_range_list
+		# debug = self.debug
 
-		elif type(polygons) is ee.featurecollection.FeatureCollection:
-			polygons_are_tiles = False
-			feature_list = polygons.sort(source['sort_by']).toList(polygons.size())
-			n_polygons = feature_list.size().getInfo()
-			print(f"{n_polygons} features have been loaded")
-
-		else:
-			raise ValueError('"polygons" must be a hash table or a feature collection')
+		feature_list = self.polygons.sort(self.source['sort_by']).toList(self.polygons.size())
+		n_polygons = feature_list.size().getInfo()
+		print(f"{n_polygons} features have been loaded")
 
 		#task_list = []
 
 		exports = []
 		exceptions = []
 
-		if isinstance(source['name'], str):
-			source['name'] = [source['name']]
-
-		if 'prefix' in sensor:
-			if isinstance(sensor['prefix'], str):
-				sensor['prefix'] = [sensor['prefix']]
-			filename_parts = sensor['prefix'] + source['name']
-		else:
-			filename_parts = source['name']
+		filename_parts = self._create_filename_parts()
 
 		if not limit:
 			limit = n_polygons
@@ -405,14 +404,14 @@ class Pipeline:
 		for i in range(loop_start, limit):
 			polygon_id = i + 1
 
-			print(f'processing polygon {polygon_id} of {limit}', end='\r', flush=True)
+			print(f'Processing polygon {polygon_id} of {limit}', end='\r', flush=True)
 
-			if polygons_are_tiles:
-				tile = tile_list[i]
-				roi = json.loads(polygons[tile]['Polygon'])
 			else:
-				feature_point = ee.Feature( feature_list.get(i) )
-				roi = feature_point.geometry()
+				feature = ee.Feature( feature_list.get(i) )
+				if self._get_feature_area(feature) > 1000:
+					print(f'Polygon {polygon_id} has area greater than 1000; skipping')
+				else:
+				roi = feature.geometry()
 				roi = roi.coordinates().getInfo()[0]
 				tile = None
 
@@ -420,13 +419,13 @@ class Pipeline:
 			#	feature_point = feature_point.buffer(source['size']).bounds()
 
 			time_stamp = "_".join(time.ctime().split(" ")[1:])
-			filename = "_".join([str(polygon_id)] + source['name'] + [time_stamp])
+			filename = "_".join([str(polygon_id)] + self.source['name'] + [time_stamp])
 			# print("processing ",filename)
 			dest_path = "/".join(filename_parts + [filename])
 
 			export_params = {
-				'bucket': export_folder,
-				'resolution': source['resolution'],
+				'bucket': self.export_folder,
+				'resolution': self.source['resolution'],
 				'filename': filename,
 				'dest_path': dest_path
 			}
