@@ -4,6 +4,7 @@ import time
 import os
 import json
 import time
+import pandas as pd
 from pandas.tseries.offsets import DateOffset
 from argparse import ArgumentParser
 from utils import clipToROI, exportImageCollectionToGCS, exportImageToGCS, sentinel2CloudScore, calcCloudCoverage, inject_B10, sentinel2ProjectShadows, computeQualityScore, mergeCollection
@@ -165,18 +166,89 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 	return exports
 
 
-class Collection:
-	def __init__(self, config_file, polygons=None, date_range_list=None, offset_array=None, debug=False):
+class Pipeline:
+	def __init__(self, config_file, polygons=None, dynamic_date_range=False,
+				 date_range_list=None, offset_array=None, debug=False):
 		self.load_config(config_file)
 		self.polygons = polygons
+		self.dynamic_date_range = dynamic_date_range
 		self.date_range_list = date_range_list
-		if offset_array:
-			self.offset_dict = self._create_offset_dict(offset_array)
 		self.debug = debug
+
+		if self.polygons:
+			if self.date_range_list is None:
+				raise ValueError('If you input polygons, you must also input a date_range_list')
+		if self.date_range_list:
+			self._check_date_range_list()
+		if self.dynamic_date_range:
+			if offset_array:
+				self.offset_dict = self._create_offset_dict(offset_array)
+			else:
+				if self.polygons:
+					raise ValueError('With dynamic date range, if you input polygons you must also input an offset_array')
+
+		self._initialize_ee()
+
+
+	def _initialize_ee(self):
+		try:
+			ee.Initialize()
+		except:
+			ee.Authenticate()
+			ee.Initialize() 
+
+
+	def _check_date_range_list(self):
+		t = type(self.date_range_list)
+		if t is not list:
+			raise ValueError(f'date_range_list is a {t}, but it must be a list')
+
+		polygon_type = type(self.polygons)
+		if self.polygons is None:
+			raise ValueError('If you input a date_range_list, you must also input polygons')
+		elif type(polygon_type) is dict:
+			tile_list = list(self.polygons.keys())
+			n_polygons = len(tile_list)
+		elif type(polygon_type) is ee.featurecollection.FeatureCollection:
+			feature_list = self.polygons.toList(self.polygons.size())
+			n_polygons = feature_list.size().getInfo()
+		else:
+			raise ValueError(f'Polygons are a {polygon_type}, but they must be a dict or an ee.FeatureCollection')
+
+		if len(self.date_range_list) != n_polygons:
+			raise ValueError('date_range_list and polygons must have the same length')
+
+		offset_value = None
+		for d in self.date_range_list:
+			if type(d) is not dict:
+				raise ValueError(f'date_range_list contains a {type(d)}, but it must solely contain dictionaries')
+
+			if self.dynamic_date_range:
+				required_keys = ['start_date', 'end_date', 'original_date', 'day_offset']
+			else:
+				required_keys = ['start_date', 'end_date']
+			if len(d.keys()) != len(required_keys):
+				if self.dynamic_date_range:
+					raise ValueError(f'With dynamic date range, all dicts must have {len(required_keys)} keys, but at least one has {len(d.keys())} keys')
+				else:
+					raise ValueError(f'Without dynamic date range, all dicts must have {len(required_keys)} keys, but at least one has {len(d.keys())} keys')
+
+			for key in d.keys():
+				if key not in required_keys:
+					raise KeyError(f'At least one dict has an inappropriate key: {key}')
+				elif (self.dynamic_date_range is True) and (key == 'day_offset'):
+					if offset_value is None:
+						offset_value = d[key]
+					else:
+						if d[key] != offset_value:
+							raise ValueError('Every date range in the date_range_list must have the same day_offset')
 
 
 	def _create_offset_dict(self, offset_array):
+		if type(offset_array) is not list:
+			raise ValueError(f'offset_array is a {type(offset_array)}, but it must be a list')
 
+		offset_array.sort()
 		off_arr = offset_array + ['from 2019']
 		d = {}
 		for i, value in enumerate(off_arr):
@@ -221,7 +293,6 @@ class Collection:
 					'end_date': end_date,
 					'original_date': original_date,
 					'day_offset': 30,
-					'area': 1
 				}
 				
 				start_end_list = [date_dict] * len(features)
@@ -252,13 +323,11 @@ class Collection:
 				start_date = str(start[i])[:10]
 				end_date = str(end[i])[:10]
 				original_date = df_labels.loc[i, 'tile date']
-				area = df_labels.loc[i, 'area (km2)']
 				date_dict = {
 					'start_date': start_date,
 					'end_date': end_date,
 					'original_date': original_date,
 					'day_offset': day_offset,
-					'area': area
 				}
 				start_end_list.append(date_dict)
 
