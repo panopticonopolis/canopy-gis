@@ -406,52 +406,34 @@ class Pipeline:
 
 			print(f'Processing polygon {polygon_id} of {limit}', end='\r', flush=True)
 
+			feature = ee.Feature( feature_list.get(i) )
+			if self._get_feature_area(feature) > 1000:
+				print(f'Polygon {polygon_id} has area greater than 1000; skipping')
 			else:
-				feature = ee.Feature( feature_list.get(i) )
-				if self._get_feature_area(feature) > 1000:
-					print(f'Polygon {polygon_id} has area greater than 1000; skipping')
-				else:
-				roi = feature.geometry()
-				roi = roi.coordinates().getInfo()[0]
-				tile = None
-
-			#if source['geometry'] == "point":
-			#	feature_point = feature_point.buffer(source['size']).bounds()
+			roi = feature.geometry()
+			roi = roi.coordinates().getInfo()[0]
+			tile = None
 
 			time_stamp = "_".join(time.ctime().split(" ")[1:])
 			filename = "_".join([str(polygon_id)] + self.source['name'] + [time_stamp])
-			# print("processing ",filename)
 			dest_path = "/".join(filename_parts + [filename])
 
-			export_params = {
+			self.export_params = {
 				'bucket': self.export_folder,
 				'resolution': self.source['resolution'],
 				'filename': filename,
 				'dest_path': dest_path
 			}
 
-			# task_params = {
-			# 	'action': export_single_feature,
-			# 	'id': "_".join(filename_parts + [str(i)]), # This must be unique per task, to allow to track retries
-			# 	'kwargs': {
-			# 		'roi': roi,
-			# 		'export_params': export_params,
-			# 		'sensor': sensor,
-			# 		'date_range': {'start_date': source['start_date'], 'end_date': source['end_date'],
-			# 		'sort_by': pre_mosaic_sort}
-			# 	}
-			# }
-
-			# task_queue.add_task(task_params, blocking=True)
 
 			date_range = date_range_list[i]
 
 			params = {
 				'roi': roi,
-				'sensor': sensor,
+				#'sensor': sensor, ## object attribute
 				'date_range': date_range,
-				'export_params': export_params,
-				'sort_by': pre_mosaic_sort,
+				#'export_params': export_params, ## object attribute
+				#'sort_by': pre_mosaic_sort, ## unnecessary
 				'polygon_id': polygon_id,
 				'area_limit': area_limit,
 				'skip_test': False,
@@ -459,23 +441,8 @@ class Pipeline:
 				'offset_dict': offset_dict
 			}
 
-			# export = export_single_feature(
-			# 	roi=roi,
-			# 	sensor=sensor,
-			# 	date_range=date_range,
-			# 	export_params=export_params,
-			# 	sort_by=pre_mosaic_sort,
-			# 	polygon_id=polygon_id,
-			# 	area_limit=area_limit,
-			# 	skip_test=False,
-			# 	tile=tile
-			# )
-
-			# exports.append(export)
-
 			export_try_except_loop(params, minutes_to_wait, exports, exceptions, 0, debug)
-			# print(f'Polygon {polygon_id} processed; please wait')
-			# time.sleep(30)
+
 			if debug:
 				logging_timestamp = "_".join(time.ctime().split(" ")[1:])
 				logging.info(f'{logging_timestamp}: Polygon {polygon_id} successfully processed')
