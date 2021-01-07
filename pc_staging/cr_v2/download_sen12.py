@@ -412,7 +412,7 @@ class Pipeline:
 			else:
 			roi = feature.geometry()
 			roi = roi.coordinates().getInfo()[0]
-			tile = None
+			# tile = None
 
 			time_stamp = "_".join(time.ctime().split(" ")[1:])
 			filename = "_".join([str(polygon_id)] + self.source['name'] + [time_stamp])
@@ -437,8 +437,8 @@ class Pipeline:
 				'polygon_id': polygon_id,
 				'area_limit': area_limit,
 				'skip_test': False,
-				'tile': tile,
-				'offset_dict': offset_dict
+				# 'tile': tile,
+				'offset_dict': self.offset_dict
 			}
 
 			export_try_except_loop(params, minutes_to_wait, exports, exceptions, 0, debug)
