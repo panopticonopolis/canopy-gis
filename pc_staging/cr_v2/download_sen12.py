@@ -20,6 +20,7 @@ logging.basicConfig(filename=LOG_FILENAME,level=logging.INFO)
 
 
 def makeFilterList(sensor):
+	'''Discuss -- do we want this at all?'''
 	filters_before = None
 	filters_after = None
 
@@ -42,6 +43,7 @@ def makeFilterList(sensor):
 	return filters_before, filters_after
 
 def makeImageCollection(sensor, roi, start_date, end_date, modifiers=[], tile=None):
+	## Split into the original call/filters and the mapping
 	filters_before, filters_after = makeFilterList(sensor)
 	#print(modifiers)
 
@@ -425,6 +427,11 @@ class Pipeline:
 				'dest_path': dest_path
 			}
 
+			self.current_poly = {
+				'date_range': date_range,
+				'polygon_id': polygon_id,
+				'roi': roi
+			}
 
 			date_range = date_range_list[i]
 
@@ -448,6 +455,44 @@ class Pipeline:
 				logging.info(f'{logging_timestamp}: Polygon {polygon_id} successfully processed')
 
 		return exports, exceptions
+
+
+		def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE',secondary_sort='CLOUDY_PIXEL_PERCENTAGE' ,filterType='less_than', mosaicBy='cloudShadowScore', polygon_id=None, date_range=None, test_coll=False):
+			best = imgC.filterMetadata(filterBy, filterType, keepThresh)
+			
+			if test_coll:
+				coll_is_good = collection_greater_than(best, 5)
+
+				if not coll_is_good:
+					return None
+			
+			best_sorted = best.sort(secondary_sort, False).sort(filterBy, False)
+
+			filtered = imgC.qualityMosaic(mosaicBy)
+
+			newC = ee.ImageCollection.fromImages( [filtered, best_sorted.mosaic()] )
+
+			return ee.Image(newC.mosaic())
+
+
+		def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=None, resolution=10, start=True, sensor_name=None, bands=None):
+			img = img.select(bands)
+
+			export = ee.batch.Export.image.toCloudStorage(
+				image=img,
+				description=filename,
+				scale=resolution,
+				region=roi,
+				fileNamePrefix=dest_path,
+				bucket=bucket,
+				maxPixels=1e13
+			)
+
+			if start:
+				export.start()
+
+			return export
+
 
 def export_try_except_loop(params, minutes_to_wait, exports, exceptions, attempts, debug=False):
 	try:

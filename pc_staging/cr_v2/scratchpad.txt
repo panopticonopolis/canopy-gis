@@ -1,0 +1,30 @@
+export_params: export_single_feature; exportImageToGCS
+
+roi: export_single_feature; makeImageCollection; exportImageToGCS
+
+
+sensor: export_single_feature; makeImageCollection
+
+date_range: makeImageCollection; mergeCollection; export_single_feature
+
+polygon_id: mergeCollection
+
+
+area_limit: export_single_feature -- deprecated
+
+skip_test: export_single_feature
+
+offset_dict: export_single_feature
+
+new_params: exportImageToGCS (note: this replaces export_params)
+
+
+NEXT STEPS:
+
+-Use makeFilterList at all?
+-split makeImageCollection into initial call/filters and the mapping
+-make a secondary sort helper function
+-include all of these as "collection helper" functions (along with the testing ones?)
+-refactor config file
+-make the dynamic date range stuff in export_single_feature into a separate function
+-make a dynamic_date_range?
