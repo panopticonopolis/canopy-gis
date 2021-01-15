@@ -14,7 +14,7 @@ from gevent.fileobject import FileObjectThread
 import logging
 
 
-LOG_FILENAME = 'full_basin_export_history.log'
+LOG_FILENAME = 'test_dynamic_date_range.log'
 logging.basicConfig(filename=LOG_FILENAME,level=logging.INFO)
 
 
@@ -305,6 +305,8 @@ def export_try_except_loop(params, minutes_to_wait, exports, exceptions, attempt
 		export_try_except_loop(params, minutes_to_wait, exports, exceptions, attempts)
 
 def export_single_feature(offset_dict, roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PIXEL_PERCENTAGE', polygon_id=None, area_limit=1000, skip_test=True, tile=None):
+	logging.info(f'---POLYGON {polygon_id}---')
+
 	modifiers = []
 	if sensor['name'].lower() == "copernicus/s2_sr":
 		#print('Inject B10')
@@ -357,6 +359,8 @@ def export_single_feature(offset_dict, roi=None, sensor=None, date_range=None, e
 
 		new_offset = offset_dict[day_offset]
 
+		logging.info(f'Offset increased from {day_offset} to {new_offset}')
+
 		if new_offset == 'two years':
 			start_date = '2019-01-01'
 			end_date = '2020-12-31'
@@ -392,6 +396,10 @@ def export_single_feature(offset_dict, roi=None, sensor=None, date_range=None, e
 				)
 
 	else:
+		logging.info(f'Polygon {polygon_id} successfully merged with offset {date_range["day_offset"]}')
+		logging.info('')
+		logging.info('')
+		return None
 		# if tile is None:
 		# 	print(f'Polygon {polygon_id} successfully merged with offset {date_range["day_offset"]}')
 		# else:

@@ -3,8 +3,8 @@ from .dynamic_date_range import collection_greater_than,image_collection_seconda
 import logging
 
 
-# LOG_FILENAME = 'collection_sizes.log'
-# logging.basicConfig(filename=LOG_FILENAME,level=logging.INFO)
+LOG_FILENAME = 'test_dynamic_date_range.log'
+logging.basicConfig(filename=LOG_FILENAME,level=logging.INFO)
 
 
 def exportImageCollectionToGCS(imgC, bucket=None, resolution=10, start=False):
@@ -115,9 +115,11 @@ def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE',secondary_s
     ## same as the JS version
     # logging.info(f'---POLYGON {polygon_id}---')
     # logging.info(f'{date_range["start_date"]} to {date_range["end_date"]}')
-    # logging.info(f'Collection size: {imgC.size().getInfo()}')
+    logging.info(f'Collection size: {imgC.size().getInfo()}')
 
     best = imgC.filterMetadata(filterBy, filterType, keepThresh)
+
+    logging.info(f'Best size: {best.size().getInfo()}')
     
     if test_coll:
         coll_is_good = collection_greater_than(best, 5)
@@ -129,8 +131,6 @@ def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE',secondary_s
     
     # best_sorted = image_collection_secondary_sort(best,primary_sort=filterBy,secondary_sort=secondary_sort)
     best_sorted = best.sort(secondary_sort, False).sort(filterBy, False)
-
-    # logging.info(f'Best size: {best.size().getInfo()}')
 
     # best_filtered = best.filterMetadata('NODATA_PIXEL_PERCENTAGE', 'less_than', 10)
 
