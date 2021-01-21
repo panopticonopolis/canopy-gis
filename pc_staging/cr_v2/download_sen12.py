@@ -170,12 +170,19 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 
 class Pipeline:
 	def __init__(self, config_file, polygons=None, dynamic_date_range=False,
-				 date_range_list=None, offset_array=None, debug=False):
+				 date_range_list=None, offset_array=None, debug=False, qual_img_thresh=5, qual_img_amount=5):
 		self.load_config(config_file)
 		self.polygons = polygons
 		self.dynamic_date_range = dynamic_date_range
 		self.date_range_list = date_range_list
 		self.debug = debug
+
+        self._minutes_to_wait = 60 
+        self.exports = []
+        self.exceptions = []
+        self.qual_img_thresh = qual_img_thresh
+        self.qual_img_amount = qual_img_amount  
+
 
 		if self.polygons:
 			if self.date_range_list is None:
@@ -279,6 +286,29 @@ class Pipeline:
 
     	return stateAreaSqKm.getInfo()
 
+    def _makeFilterList():
+        '''Discuss -- do we want this at all?'''
+        filters_before = None
+        filters_after = None
+
+        def _build_filters(filter_list):
+            filters = []
+            for f in filter_list:
+                key = list(f.keys())[0]
+                op = list(list(f.values())[0].keys())[0]
+                val = list(list(f.values())[0].values())[0]
+                filters.append(getattr(ee.Filter, op)(key, val))
+
+            return filters
+
+        if 'filters_before' in self.sensor:
+            filters_before = _build_filters(self.sensor['filters_before'])
+
+        if 'filters_after' in self.sensor:
+            filters_after = _build_filters(self.sensor['filters_after'])
+
+        return filters_before, filters_after
+
 
 	def load_config(self, config_file):
 		stream = open(config_file, 'r') 
@@ -369,7 +399,7 @@ class Pipeline:
 			offset_dict = {
 				45: 90,
 				90: 180,
-				180: 'two years'
+				180: 360
 			}
 				
 			self.polygons = fc
@@ -429,53 +459,250 @@ class Pipeline:
 			if self._get_feature_area(feature) > 1000:
 				print(f'Polygon {polygon_id} has area greater than 1000; skipping')
 			else:
-			roi = feature.geometry()
-			roi = roi.coordinates().getInfo()[0]
-			# tile = None
+                roi = feature.geometry()
+                roi = roi.coordinates().getInfo()[0]
+                # tile = None
 
-			time_stamp = "_".join(time.ctime().split(" ")[1:])
-			filename = "_".join([str(polygon_id)] + self.source['name'] + [time_stamp])
-			dest_path = "/".join(filename_parts + [filename])
+                time_stamp = "_".join(time.ctime().split(" ")[1:])
+                filename = "_".join([str(polygon_id)] + self.source['name'] + [time_stamp])
+                dest_path = "/".join(filename_parts + [filename])
 
-			self.export_params = {
-				'bucket': self.export_folder,
-				'resolution': self.source['resolution'],
-				'filename': filename,
-				'dest_path': dest_path
-			}
+                self.export_params = {
+                    'bucket': self.export_folder,
+                    'resolution': self.source['resolution'],
+                    'filename': filename,
+                    'dest_path': dest_path
+                }
 
-			self.current_poly = {
-				'date_range': date_range,
-				'polygon_id': polygon_id,
-				'roi': roi
-			}
+                date_range = date_range_list[i]
 
-			date_range = date_range_list[i]
+                self.current_poly = {
+                    'date_range': date_range,
+                    'polygon_id': polygon_id,
+                    'roi': roi
+                }
 
-			if self.dynamic_rate_range is False:
-    			skip_test_check = True
-    				
 
-			params = {
-				'roi': roi,
-				#'sensor': sensor, ## object attribute
-				'date_range': date_range,
-				#'export_params': export_params, ## object attribute
-				#'sort_by': pre_mosaic_sort, ## unnecessary
-				'polygon_id': polygon_id,
-				'area_limit': area_limit,
-				'skip_test': skip_test_check,
-				# 'tile': tile,
-				'offset_dict': self.offset_dict
-			}
+                if self.dynamic_rate_range is False:
+                    self.skip_test_check = True
+                else:
+                    self.skip_test_check = False
+                        
 
-			export_try_except_loop(params, minutes_to_wait, exports, exceptions, 0, debug)
+                export_try_except_loop(attempts=0)
 
-			if debug:
-				logging_timestamp = "_".join(time.ctime().split(" ")[1:])
-				logging.info(f'{logging_timestamp}: Polygon {polygon_id} successfully processed')
+                if debug:
+                    logging_timestamp = "_".join(time.ctime().split(" ")[1:])
+                    logging.info(f'{logging_timestamp}: Polygon {polygon_id} successfully processed')
 
-		return exports, exceptions
+		return self.exports, self.exceptions
+
+        def export_try_except_loop(attempts):
+
+        	try:
+                # export_single_feature function not created for object yet
+                export = export_single_feature()
+                self.exports.append(export)
+            except Exception as e:
+                if self.debug:
+                    attempts += 1
+                    logging_timestamp = "_".join(time.ctime().split(" ")[1:])
+                    logging.info(f'{logging_timestamp}: Timeout #{attempts}; retrying in {self._minutes_to_wait} minutes')
+                print(f'{e}; please wait for {self._minutes_to_wait} minutes', end='\r', flush=True)
+                self.exceptions.append(e)
+                # wait 60 minutes
+                time.sleep(60 * self._minutes_to_wait)
+
+                export_try_except_loop(attempts=attempts)
+
+        def makeImageCollection(ee_roi):
+            ## Split into the original call/filters and the mapping
+            filters_before, filters_after = self._makeFilterList()
+            #print(modifiers)
+
+            start_date = self.current_poly['date_range']['start_date']
+            end_date = self.current_poly['date_range']['end_date']
+
+            collection = ee.ImageCollection(self.sensor['name']) \
+                        .filterDate(ee.Date(start_date), ee.Date(end_date)) \
+                        .filterBounds(ee_roi) \
+                        .map( lambda x: clipToROI(x, ee.Geometry(roi)) )
+        
+            #print("size of collection:",collection.size().getInfo())
+
+            modifiers = []
+            if self.sensor['name'].lower() == "copernicus/s2_sr":
+                #print('Inject B10')
+                modifiers.append(inject_B10)
+
+            modifiers += [sentinel2CloudScore, calcCloudCoverage, sentinel2ProjectShadows, computeQualityScore]
+
+            if filters_before is not None:
+                collection = collection.filter( filters_before )
+            
+            for m in modifiers:
+                #print(f'Applying modifier {m}')
+                collection = collection.map(m)
+
+            if filters_after:
+                collection = collection.filter( filters_after )
+
+            return collection
+
+
+        def mergeCollection(imgC, test_coll=False):
+        # Select the best images, which are below the cloud free threshold, sort them in reverse order (worst on top) for mosaicing
+            ## same as the JS version
+            # logging.info(f'---POLYGON {polygon_id}---')
+            # logging.info(f'{date_range["start_date"]} to {date_range["end_date"]}')
+            # logging.info(f'Collection size: {imgC.size().getInfo()}')
+
+            filterBy='CLOUDY_PERCENTAGE'
+            secondary_sort='CLOUDY_PIXEL_PERCENTAGE' 
+
+            best = imgC.filterMetadata(filterBy, operator='less_than', self.qual_img_thresh)
+            
+            if test_coll:
+                coll_is_good = collection_greater_than(best, self.qual_img_amount)
+
+                # print('Coll is good:', coll_is_good)
+
+                if not coll_is_good:
+                    return None
+            
+            # best_sorted = image_collection_secondary_sort(best,primary_sort=filterBy,secondary_sort=secondary_sort)
+            best_sorted = best.sort(secondary_sort, False).sort(filterBy, False)
+
+            # logging.info(f'Best size: {best.size().getInfo()}')
+
+            # best_filtered = best.filterMetadata('NODATA_PIXEL_PERCENTAGE', 'less_than', 10)
+
+            # logging.info(f'Filtered best size: {best_filtered.size().getInfo()}')
+            # logging.info('')
+            # logging.info('')
+
+        #     return collection_quality_test_filter(imgC, best)
+        #     print('Info on first image of collection:', imgC.first().getInfo())
+            filtered = imgC.qualityMosaic(qualityBand='cloudShadowScore')
+
+            # Add the quality mosaic to fill in any missing areas of the ROI which aren't covered by good images
+            newC = ee.ImageCollection.fromImages( [filtered, best_sorted.mosaic()] )
+            
+        #     print("collection merged")
+
+            return ee.Image(newC.mosaic())
+
+
+        def export_single_feature():
+
+
+            roi_ee = ee.Geometry.Polygon(self.current_poly['roi'])
+
+            imgC = makeImageCollection(roi_ee)
+
+            #print(f'Size of polygon {polygon_id}: {imgC.size().getInfo()}')
+            # print(imgC.size().getInfo())
+            # return None
+            ## sort was not in the original version
+            #image_collection = image_collection.sort(sort_by)
+            ## below line was in the original verson;
+            ## changing to the JS version
+            ## img = image_collection.mosaic().clip(roi_ee)
+
+
+
+            # finds final offset 
+            max_offset = self.offset_dict[max(self.offset_dict.keys())]
+
+            if self.skip_test_check is True or (self.current_poly['date_range']['day_offset'] == max_offset):
+                cloudFree = mergeCollection(imgC, test_coll=False)
+            else:
+                cloudFree = mergeCollection(imgC, test_coll=True)
+                # col1,col2 = mergeCollection(imgC, polygon_id=polygon_id, date_range=date_range, test_coll=True)
+                # return col1,col2
+
+            if cloudFree is None:
+                original_date = date_range['original_date']
+                area = date_range['area']
+                day_offset = date_range['day_offset']
+
+                # offset_dict = {
+                # 	45: 90,
+                # 	90: 180,
+                # 	180: 'two years'
+                # }
+
+                # offset_dict = {
+                # 	30: 'two years'
+                # }
+
+                new_offset = offset_dict[day_offset]
+
+                if new_offset == 'two years':
+                    start_date = '2019-01-01'
+                    end_date = '2020-12-31'
+                else:
+                    start = original_date + DateOffset(days=-day_offset)
+                    end = original_date + DateOffset(days=day_offset)
+                    start_date = str(start)[:10]
+                    end_date = str(end)[:10]
+
+                # if tile is None:
+                # 	print(f'Polygon {polygon_id} is increasing offset to {new_offset}')
+                # else:
+                # 	print(f'Tile {tile} is increasing offset to {new_offset}')
+
+                new_date_range = {
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'original_date': original_date,
+                    'day_offset': new_offset,
+                    'area': area
+                }
+
+                return export_single_feature(
+                            offset_dict=offset_dict,
+                            roi=roi,
+                            sensor=sensor,
+                            date_range=new_date_range,
+                            export_params=export_params,
+                            sort_by=sort_by,
+                            polygon_id=polygon_id,
+                            tile=tile,
+                            skip_test=False
+                        )
+
+            else:
+                # if tile is None:
+                # 	print(f'Polygon {polygon_id} successfully merged with offset {date_range["day_offset"]}')
+                # else:
+                # 	print(f'Tile {tile} successfully merged with offset {date_range["day_offset"]}')
+
+                if tile is None:
+                    ## when doing a feature collection
+                    # print('clipping to ROI in export_single_feature')
+                    cloudFree = cloudFree.clip(roi_ee).reproject('EPSG:4326', None, 10)
+                else:
+                    ## when doing tile by tile
+                    # print('not clipping in export_single_feature')
+                    cloudFree = cloudFree.reproject('EPSG:4326', None, 10)
+                ## Do we need to mosaic it now???
+                # print('cloudFree info:', cloudFree.getInfo())
+                # print('Mosaic type:', type(img))
+
+                ## make NDVI band
+                ndvi = cloudFree.normalizedDifference(['B8', 'B4']).rename('NDVI')
+                cloudFree = cloudFree.addBands(ndvi)
+                cloudFree = cloudFree.float()
+
+                new_params = export_params.copy()
+                new_params['img'] = cloudFree
+                new_params['roi'] = roi
+                new_params['sensor_name'] = sensor['name'].lower()
+                new_params['bands'] = sensor['bands']
+                
+                return exportImageToGCS(**new_params)
+
 
 
 		def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE',secondary_sort='CLOUDY_PIXEL_PERCENTAGE' ,filterType='less_than', mosaicBy='cloudShadowScore', polygon_id=None, date_range=None, test_coll=False):
@@ -514,22 +741,6 @@ class Pipeline:
 
 			return export
 
-
-def export_try_except_loop(params, minutes_to_wait, exports, exceptions, attempts, debug=False):
-	try:
-		export = export_single_feature(**params)
-		exports.append(export)
-	except Exception as e:
-		if debug:
-			attempts += 1
-			logging_timestamp = "_".join(time.ctime().split(" ")[1:])
-			logging.info(f'{logging_timestamp}: Timeout #{attempts}; retrying in {minutes_to_wait} minutes')
-		print(f'{e}; please wait for {minutes_to_wait} minutes', end='\r', flush=True)
-		exceptions.append(e)
-		# wait 30 minutes
-		time.sleep(60 * minutes_to_wait)
-
-		export_try_except_loop(params, minutes_to_wait, exports, exceptions, attempts)
 
 def export_single_feature(offset_dict, roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PIXEL_PERCENTAGE', polygon_id=None, area_limit=1000, skip_test=True, tile=None):
 	modifiers = []
