@@ -188,6 +188,8 @@ class Pipeline:
 			else:
 				if self.polygons:
 					raise ValueError('With dynamic date range, if you input polygons you must also input an offset_array')
+    			
+
 
 		self._initialize_ee()
 
@@ -377,7 +379,7 @@ class Pipeline:
 
 
 	def process_datasource_custom_daterange(
-		self, loop_start=0, limit=None, minutes_to_wait=60
+		self, loop_start=0, limit=None, minutes_to_wait=60, polygon_id_list=None
 	):
 		# source = self.source
 		# sensor = self.sensor
@@ -403,7 +405,22 @@ class Pipeline:
 		### ERROR? ###
 		## Originally this was range(1, n_features), but we're pretty sure
 		## that should be 0 so we changed it.
-		for i in range(loop_start, limit):
+
+
+		if polygon_id_list:
+    		if type(polygon_id_list) is list or type(polygon_id_list) is tuple:
+                if all(isinstance(x, int) for x in polygon_id_list) is True:
+                    loop_values = [poly_id - 1 for poly_id in polygon_id_list]
+                else:
+                    raise ValueError(f'all values within polygon_id_list should be of type {int}')    
+            else:
+                raise ValueError('polygon_id_list has to be either a list or a tuple')
+    					
+    		
+		else:
+			loop_values = range(loop_start, limit)
+
+		for i in loop_values:
 			polygon_id = i + 1
 
 			print(f'Processing polygon {polygon_id} of {limit}', end='\r', flush=True)
@@ -435,6 +452,10 @@ class Pipeline:
 
 			date_range = date_range_list[i]
 
+			if self.dynamic_rate_range is False:
+    			skip_test_check = True
+    				
+
 			params = {
 				'roi': roi,
 				#'sensor': sensor, ## object attribute
@@ -443,7 +464,7 @@ class Pipeline:
 				#'sort_by': pre_mosaic_sort, ## unnecessary
 				'polygon_id': polygon_id,
 				'area_limit': area_limit,
-				'skip_test': False,
+				'skip_test': skip_test_check,
 				# 'tile': tile,
 				'offset_dict': self.offset_dict
 			}
