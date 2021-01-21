@@ -115,11 +115,11 @@ def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE',secondary_s
     ## same as the JS version
     # logging.info(f'---POLYGON {polygon_id}---')
     # logging.info(f'{date_range["start_date"]} to {date_range["end_date"]}')
-    logging.info(f'Collection size: {imgC.size().getInfo()}')
+    #logging.info(f'Collection size: {imgC.size().getInfo()}')
 
     best = imgC.filterMetadata(filterBy, filterType, keepThresh)
 
-    logging.info(f'Best size: {best.size().getInfo()}')
+    #logging.info(f'Best size: {best.size().getInfo()}')
     
     if test_coll:
         coll_is_good = collection_greater_than(best, 5)

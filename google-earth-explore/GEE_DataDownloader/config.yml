@@ -24,7 +24,7 @@ sensors:
     type: "opt"
     bands: ['B2','B3','B4','B8','B8A','TCI_R','TCI_G','TCI_B','NDVI']
     filters_after:
-      - CLOUDY_PERCENTAGE: {'lte': 10}
+      - CLOUDY_PERCENTAGE: {'lte': 50}
 
   - name: "COPERNICUS/S2"
     type: "opt"
@@ -44,7 +44,7 @@ sensors:
       - transmitterReceiverPolarisation: {'listContains': 'VH'}
 
 data_list:
-  - name: ['full_basin_export_v10_2_years']
+  - name: ['misha_polygons_v10_ddr_one_month_high_threshold']
     start_date: '2019-01-01'
     end_date: '2020-12-31'
     geometry: point
