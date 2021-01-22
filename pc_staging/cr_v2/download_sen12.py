@@ -349,7 +349,7 @@ class Pipeline:
                 fc = ee.FeatureCollection(features)
 
                 offset_dict = {
-                    30: 'two years'
+                    30: 360
                 }
                 
                 self.polygons = fc
@@ -472,7 +472,7 @@ class Pipeline:
                     'dest_path': dest_path
                 }
 
-                date_range = date_range_list[i]
+                date_range = self.date_range_list[i]
 
                 self.current_poly = {
                     'date_range': date_range,
@@ -481,13 +481,12 @@ class Pipeline:
                 }
 
 
-                if self.dynamic_rate_range is False:
+                if self.dynamic_date_range is False:
                     self.skip_test_check = True
                 else:
                     self.skip_test_check = False
                         
-
-                export_try_except_loop(attempts=0)
+                self.export_try_except_loop(attempts=0)
 
                 if debug:
                     logging_timestamp = "_".join(time.ctime().split(" ")[1:])
@@ -495,207 +494,207 @@ class Pipeline:
 
         return self.exports, self.exceptions
 
-        def export_try_except_loop(attempts):
+    def export_try_except_loop(self,attempts):
 
-            try:
-                # export_single_feature function not created for object yet
-                export = export_single_feature()
-                self.exports.append(export)
-            except Exception as e:
-                if self.debug:
-                    attempts += 1
-                    logging_timestamp = "_".join(time.ctime().split(" ")[1:])
-                    logging.info(f'{logging_timestamp}: Timeout #{attempts}; retrying in {self._minutes_to_wait} minutes')
-                print(f'{e}; please wait for {self._minutes_to_wait} minutes', end='\r', flush=True)
-                self.exceptions.append(e)
-                # wait 60 minutes
-                time.sleep(60 * self._minutes_to_wait)
+        try:
+            # export_single_feature function not created for object yet
+            export = self.export_single_feature()
+            self.exports.append(export)
+        except Exception as e:
+            if self.debug:
+                attempts += 1
+                logging_timestamp = "_".join(time.ctime().split(" ")[1:])
+                logging.info(f'{logging_timestamp}: Timeout #{attempts}; retrying in {self._minutes_to_wait} minutes')
+            print(f'{e}; please wait for {self._minutes_to_wait} minutes', end='\r', flush=True)
+            self.exceptions.append(e)
+            # wait 60 minutes
+            time.sleep(60 * self._minutes_to_wait)
 
-                export_try_except_loop(attempts=attempts)
+            self.export_try_except_loop(attempts=attempts)
 
-        def makeImageCollection(ee_roi):
-            ## Split into the original call/filters and the mapping
-            filters_before, filters_after = self._makeFilterList()
-            #print(modifiers)
+    def makeImageCollection(self,ee_roi):
+        ## Split into the original call/filters and the mapping
+        filters_before, filters_after = self._makeFilterList()
+        #print(modifiers)
 
-            start_date = self.current_poly['date_range']['start_date']
-            end_date = self.current_poly['date_range']['end_date']
+        start_date = self.current_poly['date_range']['start_date']
+        end_date = self.current_poly['date_range']['end_date']
 
-            collection = ee.ImageCollection(self.sensor['name']) \
-                        .filterDate(ee.Date(start_date), ee.Date(end_date)) \
-                        .filterBounds(ee_roi) \
-                        .map( lambda x: clipToROI(x, ee.Geometry(roi)) )
-        
-            #print("size of collection:",collection.size().getInfo())
-
-            modifiers = []
-            if self.sensor['name'].lower() == "copernicus/s2_sr":
-                #print('Inject B10')
-                modifiers.append(inject_B10)
-
-            modifiers += [sentinel2CloudScore, calcCloudCoverage, sentinel2ProjectShadows, computeQualityScore]
-
-            if filters_before is not None:
-                collection = collection.filter( filters_before )
-            
-            for m in modifiers:
-                #print(f'Applying modifier {m}')
-                collection = collection.map(m)
-
-            if filters_after:
-                collection = collection.filter( filters_after )
-
-            return collection
-
-
-
-        def mergeCollection(imgC, test_coll=False):
-        # Select the best images, which are below the cloud free threshold, sort them in reverse order (worst on top) for mosaicing
-            ## same as the JS version
-            # logging.info(f'---POLYGON {polygon_id}---')
-            # logging.info(f'{date_range["start_date"]} to {date_range["end_date"]}')
-            # logging.info(f'Collection size: {imgC.size().getInfo()}')
-
-            filterBy='CLOUDY_PERCENTAGE'
-            secondary_sort='CLOUDY_PIXEL_PERCENTAGE' 
-
-            best = imgC.filterMetadata(filterBy, operator='less_than', self.qual_img_thresh)
-            
-            if test_coll:
-                coll_is_good = collection_greater_than(best, self.qual_img_amount)
-
-                # print('Coll is good:', coll_is_good)
-
-                if not coll_is_good:
-                    return None
-            
-            # best_sorted = image_collection_secondary_sort(best,primary_sort=filterBy,secondary_sort=secondary_sort)
-            best_sorted = best.sort(secondary_sort, False).sort(filterBy, False)
-
-            # logging.info(f'Best size: {best.size().getInfo()}')
-
-            # best_filtered = best.filterMetadata('NODATA_PIXEL_PERCENTAGE', 'less_than', 10)
-
-            # logging.info(f'Filtered best size: {best_filtered.size().getInfo()}')
-            # logging.info('')
-            # logging.info('')
-
-        #     return collection_quality_test_filter(imgC, best)
-        #     print('Info on first image of collection:', imgC.first().getInfo())
-            filtered = imgC.qualityMosaic(qualityBand='cloudShadowScore')
-
-            # Add the quality mosaic to fill in any missing areas of the ROI which aren't covered by good images
-            newC = ee.ImageCollection.fromImages( [filtered, best_sorted.mosaic()] )
-            
-        #     print("collection merged")
-
-            return ee.Image(newC.mosaic())
-
-        def _expand_date_range():
-
-            original_date = self.current_poly['date_range']['original_date']
-            day_offset = self.current_poly['date_range']['day_offset']
-
-
-            new_offset = self.offset_dict[day_offset]
+        collection = ee.ImageCollection(self.sensor['name']) \
+                    .filterDate(ee.Date(start_date), ee.Date(end_date)) \
+                    .filterBounds(ee_roi) \
+                    .map( lambda x: clipToROI(x, ee.Geometry(roi)) )
     
-            start = original_date + DateOffset(days=-day_offset)
-            end = original_date + DateOffset(days=day_offset)
-            start_date = str(start)[:10]
-            end_date = str(end)[:10]
+        #print("size of collection:",collection.size().getInfo())
 
-            new_date_range = {
-                'start_date': start_date,
-                'end_date': end_date,
-                'original_date': original_date,
-                'day_offset': new_offset
-            }
+        modifiers = []
+        if self.sensor['name'].lower() == "copernicus/s2_sr":
+            #print('Inject B10')
+            modifiers.append(inject_B10)
 
-            return new_date_range
+        modifiers += [sentinel2CloudScore, calcCloudCoverage, sentinel2ProjectShadows, computeQualityScore]
 
-        def _add_ndvi_band(img):
-            ndvi = img.normalizedDifference(['B8', 'B4']).rename('NDVI')
-            cloudFree = cloudFree.addBands(ndvi)
-            cloudFree = cloudFree.float()
+        if filters_before is not None:
+            collection = collection.filter( filters_before )
+        
+        for m in modifiers:
+            #print(f'Applying modifier {m}')
+            collection = collection.map(m)
 
-            return cloudFree
+        if filters_after:
+            collection = collection.filter( filters_after )
 
-
-        def export_single_feature():
-
-
-            roi_ee = ee.Geometry.Polygon(self.current_poly['roi'])
-
-            imgC = makeImageCollection(roi_ee)
-
-            #print(f'Size of polygon {polygon_id}: {imgC.size().getInfo()}')
-            # print(imgC.size().getInfo())
-            # return None
-            ## sort was not in the original version
-            #image_collection = image_collection.sort(sort_by)
-            ## below line was in the original verson;
-            ## changing to the JS version
-            ## img = image_collection.mosaic().clip(roi_ee)
+        return collection
 
 
 
-            # finds final offset 
-            max_offset = self.offset_dict[max(self.offset_dict.keys())]
+    def mergeCollection(self, imgC, test_coll=False):
+    # Select the best images, which are below the cloud free threshold, sort them in reverse order (worst on top) for mosaicing
+        ## same as the JS version
+        # logging.info(f'---POLYGON {polygon_id}---')
+        # logging.info(f'{date_range["start_date"]} to {date_range["end_date"]}')
+        # logging.info(f'Collection size: {imgC.size().getInfo()}')
 
-            if self.skip_test_check is True or (self.current_poly['date_range']['day_offset'] == max_offset):
-                cloudFree = mergeCollection(imgC, test_coll=False)
-            else:
-                cloudFree = mergeCollection(imgC, test_coll=True)
+        filterBy='CLOUDY_PERCENTAGE'
+        secondary_sort='CLOUDY_PIXEL_PERCENTAGE' 
 
-            if cloudFree is None:
-                self.current_poly['date_range'] = self._expand_date_range()
-                return self.export_single_feature()
+        best = imgC.filterMetadata(filterBy, operator='less_than', value=self.qual_img_thresh)
+        
+        if test_coll:
+            coll_is_good = collection_greater_than(best, self.qual_img_amount)
 
-            else:
+            # print('Coll is good:', coll_is_good)
 
-                cloudFree = cloudFree.clip(roi_ee).reproject('EPSG:4326', None, 10)
+            if not coll_is_good:
+                return None
+        
+        # best_sorted = image_collection_secondary_sort(best,primary_sort=filterBy,secondary_sort=secondary_sort)
+        best_sorted = best.sort(secondary_sort, False).sort(filterBy, False)
 
-                ## make NDVI band
-                cloudFree = self._add_ndvi_band(img=cloudFree)
+        # logging.info(f'Best size: {best.size().getInfo()}')
+
+        # best_filtered = best.filterMetadata('NODATA_PIXEL_PERCENTAGE', 'less_than', 10)
+
+        # logging.info(f'Filtered best size: {best_filtered.size().getInfo()}')
+        # logging.info('')
+        # logging.info('')
+
+    #     return collection_quality_test_filter(imgC, best)
+    #     print('Info on first image of collection:', imgC.first().getInfo())
+        filtered = imgC.qualityMosaic(qualityBand='cloudShadowScore')
+
+        # Add the quality mosaic to fill in any missing areas of the ROI which aren't covered by good images
+        newC = ee.ImageCollection.fromImages( [filtered, best_sorted.mosaic()] )
+        
+    #     print("collection merged")
+
+        return ee.Image(newC.mosaic())
+
+    def _expand_date_range(self):
+
+        original_date = self.current_poly['date_range']['original_date']
+        day_offset = self.current_poly['date_range']['day_offset']
 
 
-                self.export_params['img'] = cloudFree
-                self.export_params['roi'] = self.current_poly['roi']
-                self.export_params['sensor_name'] = self.sensor['name'].lower()
-                self.export_params['bands'] = self.sensor['bands']
-                
-                return self.exportImageToGCS()
+        new_offset = self.offset_dict[day_offset]
+
+        start = original_date + DateOffset(days=-day_offset)
+        end = original_date + DateOffset(days=day_offset)
+        start_date = str(start)[:10]
+        end_date = str(end)[:10]
+
+        new_date_range = {
+            'start_date': start_date,
+            'end_date': end_date,
+            'original_date': original_date,
+            'day_offset': new_offset
+        }
+
+        return new_date_range
+
+    def _add_ndvi_band(self,img):
+        ndvi = img.normalizedDifference(['B8', 'B4']).rename('NDVI')
+        cloudFree = cloudFree.addBands(ndvi)
+        cloudFree = cloudFree.float()
+
+        return cloudFree
 
 
-        def exportImageToGCS(start=True):
-
-            img = self.export_params['img']
-            bands = self.export_params['bands']
-            filename = self.export_params['filename']
-            resolution = filename = self.export_params['resolution']
-            roi = self.export_params['roi']
-            des_path = self.export_params['dest_path']
-            bucket = self.export_params['bucket']
+    def export_single_feature(self):
 
 
-            img = img.select(bands)
-                
+        roi_ee = ee.Geometry.Polygon(self.current_poly['roi'])
 
-            export = ee.batch.Export.image.toCloudStorage(
-                image=img,
-                description=filename,
-                scale=resolution,
-                region=roi,
-                fileNamePrefix=dest_path,
-                bucket=bucket,
-                maxPixels=1e13
-                )
+        imgC = makeImageCollection(roi_ee)
+
+        #print(f'Size of polygon {polygon_id}: {imgC.size().getInfo()}')
+        # print(imgC.size().getInfo())
+        # return None
+        ## sort was not in the original version
+        #image_collection = image_collection.sort(sort_by)
+        ## below line was in the original verson;
+        ## changing to the JS version
+        ## img = image_collection.mosaic().clip(roi_ee)
+
+
+
+        # finds final offset 
+        max_offset = self.offset_dict[max(self.offset_dict.keys())]
+
+        if self.skip_test_check is True or (self.current_poly['date_range']['day_offset'] == max_offset):
+            cloudFree = mergeCollection(imgC, test_coll=False)
+        else:
+            cloudFree = mergeCollection(imgC, test_coll=True)
+
+        if cloudFree is None:
+            self.current_poly['date_range'] = self._expand_date_range()
+            return self.export_single_feature()
+
+        else:
+
+            cloudFree = cloudFree.clip(roi_ee).reproject('EPSG:4326', None, 10)
+
+            ## make NDVI band
+            cloudFree = self._add_ndvi_band(img=cloudFree)
+
+
+            self.export_params['img'] = cloudFree
+            self.export_params['roi'] = self.current_poly['roi']
+            self.export_params['sensor_name'] = self.sensor['name'].lower()
+            self.export_params['bands'] = self.sensor['bands']
+            
+            return self.exportImageToGCS()
+
+
+    def exportImageToGCS(self, start=True):
+
+        img = self.export_params['img']
+        bands = self.export_params['bands']
+        filename = self.export_params['filename']
+        resolution = filename = self.export_params['resolution']
+        roi = self.export_params['roi']
+        des_path = self.export_params['dest_path']
+        bucket = self.export_params['bucket']
+
+
+        img = img.select(bands)
             
 
-            if start:
-                export.start()
-                
-            return export
+        export = ee.batch.Export.image.toCloudStorage(
+            image=img,
+            description=filename,
+            scale=resolution,
+            region=roi,
+            fileNamePrefix=dest_path,
+            bucket=bucket,
+            maxPixels=1e13
+            )
+        
+
+        if start:
+            export.start()
+            
+        return export
 
 
 
