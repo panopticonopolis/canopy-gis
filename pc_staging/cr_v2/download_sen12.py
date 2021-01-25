@@ -169,6 +169,52 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 
 
 class Pipeline:
+    '''
+
+    Pipeline object for exporting Cloudfree Merging images using Google Earth Engine (GEE).
+    Requires a configuration file in yml format (see ___ for details). Other arguments are optional.
+
+    Arguments:
+    "config_file": The location of your configuration file.
+
+    "polygons": You may choose to enter a GEE FeatureCollection object here that contains the Regions of Interest (ROI's)
+    you wish to export. If so, please also input a date_range_list.
+    If you don't use this argument, make sure to run the "import_aois" method. Default value is None.
+
+    "date_range_list": If you enter polygons, you must also enter a date range list.
+    The date range list should be a list of dictionaries. There should be one dictionary per polygon in your "polygons" FeatureCollection.
+    If you don't use this argument, make sure to run the "import_aois" method. Default value is None.
+    Each dictionary must contain at least the following two keys:
+        "start_date": The first date to query images from for that polygon. This date should be a string in 'year-month-day' format.
+            Examples: '2020-01-01'; '2019-11-30'
+        "end_date": The last date to query images from for that polygon. This date should be a string in 'year-month-day' format.
+            Examples: '2020-01-01'; '2019-11-30'
+    If you use Dynamic Date Range, each dictionary must also include the following two key/value pairs:
+        "original_date": The 'central' date of your date range. This date should be a string in 'year-month-day' format.
+            Examples: '2020-01-01'; '2019-11-30'
+        "day_offset": To get your first date range while using Dynamic Date Range, take the original_date and expand forward and back
+        by the number of days indicated by day_offset. For example, if the original_date is July 1 2020, and your day_offset is 30,
+        then your start_date will be June 1 2020, and your end_date will be July 31 2020. This should be an integer.
+        When using Dynamic Date Range, we highly recommend either using the "import_aois" method, or deciding on your original_date
+        and day_offset first and generating the start_date and end_date from them.
+
+    "dynamic_date_range": Boolean for whether to use the Dynamic Date Range feature. Default is False.
+
+    "offset_array": If 'dynamic_date_range' is set to True and 'polygons' are provided, then an offset_array must also be provided.
+    This should be a list of integers. The smallest integer should be the smallest. day_offset used in the date_range_list. If an
+    insufficient amount of images are found using that offset, the pipeline will then use the second-smallest integer as the new offset,
+    and so on. Once the highest integer is reached, that will be used as the final date range.
+    Defaults to None.
+
+    "debug": Boolean for whether to log each export and the time of each export. Defaults to False.
+
+    "qual_img_thresh": Integer that defines the highest percent cloudcover an image may have to be considered a "quality image." Defaults to 5.
+
+    "qual_img_amoount": Integer that defines how many quality images must be found for the given date range to be considered fine. In other words,
+    if the amount of quality images found are below this amount, the date range expands and images are queried again. Defaults to 5.
+
+    '''
+
     def __init__(self, config_file, polygons=None, dynamic_date_range=False,
                  date_range_list=None, offset_array=None, debug=False, 
                  qual_img_thresh=5, qual_img_amount=5):
@@ -200,6 +246,10 @@ class Pipeline:
 
 
     def _initialize_ee(self):
+        '''
+        Helper function that initializes GEE
+        '''
+
         try:
             ee.Initialize()
         except:
@@ -208,6 +258,10 @@ class Pipeline:
 
 
     def _check_date_range_list(self):
+        '''
+        Helper function that checks to make sure the date range list is in the proper format and raises an error if it isn't
+        '''
+
         t = type(self.date_range_list)
         if t is not list:
             raise ValueError(f'date_range_list is a {t}, but it must be a list')
@@ -251,6 +305,12 @@ class Pipeline:
 
 
     def _create_offset_dict(self, offset_array):
+        '''
+        Helper function that creates an offset dictionary based on an input array
+
+        "offset_array": List containing offset values
+        '''
+
         if type(offset_array) is not list:
             raise ValueError(f'offset_array is a {type(offset_array)}, but it must be a list')
 
@@ -265,6 +325,10 @@ class Pipeline:
 
 
     def _create_filename_parts(self):
+        '''
+        Helper function that creates a filename based on the configuration file
+        '''
+
         if isinstance(self.source['name'], str):
             self.source['name'] = [self.source['name']]
 
@@ -279,13 +343,19 @@ class Pipeline:
 
 
     def _get_feature_area(self, feature):
+        '''
+        Helper function that gets the area of a GEE Feature object
+
+        "feature": GEE Feature object
+        '''
+
         stateArea = feature.geometry().area()
         stateAreaSqKm = ee.Number(stateArea).divide(1e6).round()
 
         return stateAreaSqKm.getInfo()
 
     def _makeFilterList(self):
-        '''Discuss -- do we want this at all?'''
+        '''Helper function that builds a filter list based off of the configuration file'''
         filters_before = None
         filters_after = None
 
@@ -309,6 +379,12 @@ class Pipeline:
 
 
     def load_config(self, config_file):
+        '''
+        Loads a configuration file
+
+        "config_file": The location of the configuration file
+        '''
+
         stream = open(config_file, 'r') 
         config_dict = yaml.load(stream)
         self.source = config_dict['data_list'][0]
@@ -319,6 +395,9 @@ class Pipeline:
 
     def import_aois(self, csv_loc, Full_Congo_Pull=False, start_date=None,
                     end_date=None, days_duration=90, poly_start=0, poly_limit=None):
+        '''
+
+        '''
         features = []
         polygons = []
         day_offset = days_duration / 2
@@ -409,6 +488,23 @@ class Pipeline:
     def process_datasource_custom_daterange(
         self, loop_start=0, limit=None, minutes_to_wait=60, polygon_id_list=None
     ):
+        '''
+        Applies Cloudfree Merging to the polygons in the GEE FeatureCollection and exports them one at a time.
+
+        IMPORTANT NOTE: GEE only allows 3,000 exports in your export queue at any one time. Please make sure
+        your feature collection does not exceed 3,000.
+
+        "loop_start": This method loops through your entire FeatureCollection by default. If you wish to instead
+        start the loop at a specific value, input that value here. Default is 0.
+
+        "limit": Again, this method loops through the entire FeatureCollection by default.
+        If you want to only export the first X polygons instead, input that X here.
+
+        "minutes_to_wait": If GEE times out, this method waits 60 minutes by default before starting again where it left off.
+        You may change the number of minutes it waits here.
+
+        "polygon_id_list": If you only want to export certain polygons, enter their IDs into a list and input that list here.
+        '''
         # source = self.source
         # sensor = self.sensor
         # export_folder = self.export_folder
@@ -486,7 +582,7 @@ class Pipeline:
                 else:
                     self.skip_test_check = False
                         
-                self.export_try_except_loop(attempts=0)
+                self._export_try_except_loop(attempts=0)
 
                 if self.debug:
                     logging_timestamp = "_".join(time.ctime().split(" ")[1:])
@@ -494,8 +590,11 @@ class Pipeline:
 
         return self.exports, self.exceptions
 
-    def export_try_except_loop(self,attempts):
-
+    def _export_try_except_loop(self,attempts):
+        '''
+        Helper function that enables the pipeline to wait a certain number of minutes after a GEE error
+        instead of erroring out
+        '''
         try:
             # export_single_feature function not created for object yet
             export = self.export_single_feature()
@@ -513,6 +612,22 @@ class Pipeline:
             self.export_try_except_loop(attempts=attempts)
 
     def makeImageCollection(self,ee_roi):
+        '''
+        Makes a GEE ImageCollection object based off of an input GEE Geometry Polygon object, the date range
+        of the current polygon under consideration (based off of the Date Range List), and then applies
+        the necessary Cloudfree Merging functions to it. Filters are also applied based on the configuration file.
+
+        "ee_roi": A GEE Geometry Polygon object specifying the bounds of the image query.
+
+        The following functions are applied to each image in the query:
+            inject_B10: If the images are from Sentinel-2 L2A, they lack the 'B10' band; this function finds the matching
+                        L1C image and gets its B10 band.
+            sentinel2CloudScore: Makes a cloud mask
+            calcCloudCoverage: Calculates the cloud coverage of the image based off of the cloud mask
+            sentinel2ProjectShadows: Makes a mask of cloud shadows
+            computeQualityScore: Computes the Quality Pixel Percentage score for the image
+
+        '''
         ## Split into the original call/filters and the mapping
         filters_before, filters_after = self._makeFilterList()
         #print(modifiers)
@@ -549,13 +664,22 @@ class Pipeline:
 
 
     def mergeCollection(self, imgC, test_coll=False):
+        '''
+        Uses Cloudfree Merging to merge a GEE ImageCollection into a single cloud-free image.
+
+        "imgC": The ImageCollection you want to merge
+
+        "test_coll": Boolean that determines whether or not to test the collection to see if it has a
+        sufficient number of quality images. Used for Dynamic Date Range. Defaults to False.
+        '''
+
     # Select the best images, which are below the cloud free threshold, sort them in reverse order (worst on top) for mosaicing
         ## same as the JS version
         # logging.info(f'---POLYGON {polygon_id}---')
         # logging.info(f'{date_range["start_date"]} to {date_range["end_date"]}')
         # logging.info(f'Collection size: {imgC.size().getInfo()}')
 
-        filterBy='CLOUDY_PERCENTAGE'
+        filterBy='NON_QUALITY_PIXEL_PERCENTAGE'
         secondary_sort='CLOUDY_PIXEL_PERCENTAGE' 
 
         best = imgC.filterMetadata(filterBy, operator='less_than', value=self.qual_img_thresh)
@@ -591,6 +715,9 @@ class Pipeline:
         return ee.Image(newC.mosaic())
 
     def _expand_date_range(self):
+        '''
+        Helper function that expands the date range to the next day_offset level. Used in Dynamic Date Range.
+        '''
 
         original_date = self.current_poly['date_range']['original_date']
         day_offset = self.current_poly['date_range']['day_offset']
@@ -613,6 +740,12 @@ class Pipeline:
         return new_date_range
 
     def _add_ndvi_band(self,img):
+        '''
+        Helper function that calculates the NDVI values for a GEE Image and adds it
+        to that image as a band.
+
+        "img": The image you want the NDVI band added to
+        '''
         ndvi = img.normalizedDifference(['B8', 'B4']).rename('NDVI')
         cloudFree = img.addBands(ndvi)
         cloudFree = cloudFree.float()
@@ -621,8 +754,10 @@ class Pipeline:
 
 
     def export_single_feature(self):
-
-
+        '''
+        Based off of the current polygon and its date range, queries for images, merges them, and exports
+        the resulting cloud-free image.
+        '''
         roi_ee = ee.Geometry.Polygon(self.current_poly['roi'])
 
         imgC = self.makeImageCollection(roi_ee)
@@ -667,6 +802,12 @@ class Pipeline:
 
 
     def exportImageToGCS(self, start=True):
+        '''
+        Exports an image to your Google Cloud Services account based off of the
+        current export_params attribute.
+
+        "start": Boolean. Set to False if you don't want to actually export the image. Defaults to True.
+        '''
 
         img = self.export_params['img']
         bands = self.export_params['bands']

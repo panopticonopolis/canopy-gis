@@ -183,11 +183,11 @@ def calcCloudCoverage(img, cloudThresh=0.2):
     ## maxAreaError not in the javascript version, which uses the default
     ## for the .area function calls
     maxAreaError = 10
-    cloudPercent = ee.Number(stats.get('cloudMask')).divide(imgPoly.area(maxAreaError)).multiply(100)
+    nonQualityPercent = ee.Number(stats.get('cloudMask')).divide(imgPoly.area(maxAreaError)).multiply(100)
     coveragePercent = ee.Number(intersection.area(maxAreaError)).divide(roi.area(maxAreaError)).multiply(100)
     cloudPercentROI = ee.Number(stats.get('cloudMask')).divide(roi.area(maxAreaError)).multiply(100)
 
-    img = img.set('CLOUDY_PERCENTAGE', cloudPercent)
+    img = img.set('NON_QUALITY_PIXEL_PERCENTAGE', nonQualityPercent)
     img = img.set('ROI_COVERAGE_PERCENT', coveragePercent)
     img = img.set('CLOUDY_PERCENTAGE_ROI', cloudPercentROI)
     
