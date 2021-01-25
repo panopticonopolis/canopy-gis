@@ -284,7 +284,7 @@ class Pipeline:
 
         return stateAreaSqKm.getInfo()
 
-    def _makeFilterList():
+    def _makeFilterList(self):
         '''Discuss -- do we want this at all?'''
         filters_before = None
         filters_after = None
@@ -488,7 +488,7 @@ class Pipeline:
                         
                 self.export_try_except_loop(attempts=0)
 
-                if debug:
+                if self.debug:
                     logging_timestamp = "_".join(time.ctime().split(" ")[1:])
                     logging.info(f'{logging_timestamp}: Polygon {polygon_id} successfully processed')
 
@@ -523,7 +523,7 @@ class Pipeline:
         collection = ee.ImageCollection(self.sensor['name']) \
                     .filterDate(ee.Date(start_date), ee.Date(end_date)) \
                     .filterBounds(ee_roi) \
-                    .map( lambda x: clipToROI(x, ee.Geometry(roi)) )
+                    .map( lambda x: clipToROI(x, ee.Geometry(ee_roi)) )
     
         #print("size of collection:",collection.size().getInfo())
 
@@ -614,7 +614,7 @@ class Pipeline:
 
     def _add_ndvi_band(self,img):
         ndvi = img.normalizedDifference(['B8', 'B4']).rename('NDVI')
-        cloudFree = cloudFree.addBands(ndvi)
+        cloudFree = img.addBands(ndvi)
         cloudFree = cloudFree.float()
 
         return cloudFree
@@ -625,7 +625,7 @@ class Pipeline:
 
         roi_ee = ee.Geometry.Polygon(self.current_poly['roi'])
 
-        imgC = makeImageCollection(roi_ee)
+        imgC = self.makeImageCollection(roi_ee)
 
         #print(f'Size of polygon {polygon_id}: {imgC.size().getInfo()}')
         # print(imgC.size().getInfo())
@@ -642,9 +642,9 @@ class Pipeline:
         max_offset = self.offset_dict[max(self.offset_dict.keys())]
 
         if self.skip_test_check is True or (self.current_poly['date_range']['day_offset'] == max_offset):
-            cloudFree = mergeCollection(imgC, test_coll=False)
+            cloudFree = self.mergeCollection(imgC, test_coll=False)
         else:
-            cloudFree = mergeCollection(imgC, test_coll=True)
+            cloudFree = self.mergeCollection(imgC, test_coll=True)
 
         if cloudFree is None:
             self.current_poly['date_range'] = self._expand_date_range()
@@ -671,9 +671,9 @@ class Pipeline:
         img = self.export_params['img']
         bands = self.export_params['bands']
         filename = self.export_params['filename']
-        resolution = filename = self.export_params['resolution']
+        resolution = self.export_params['resolution']
         roi = self.export_params['roi']
-        des_path = self.export_params['dest_path']
+        dest_path = self.export_params['dest_path']
         bucket = self.export_params['bucket']
 
 
