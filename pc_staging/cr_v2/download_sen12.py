@@ -19,153 +19,57 @@ LOG_FILENAME = 'full_basin_export_history.log'
 logging.basicConfig(filename=LOG_FILENAME,level=logging.INFO)
 
 
-def makeFilterList(sensor):
-    '''Discuss -- do we want this at all?'''
-    filters_before = None
-    filters_after = None
+def makeImageCollection(ee_dir, ee_roi, start_date, end_date, filters_before=None, modifiers=[], filters_after=None):
+    '''
+    Queries for Google Earth Engine (GEE) images based off of the input values. See below for details.
+    Outputs a GEE ImageCollection object.
 
-    def _build_filters(filter_list):
-        filters = []
-        for f in filter_list:
-            key = list(f.keys())[0]
-            op = list(list(f.values())[0].keys())[0]
-            val = list(list(f.values())[0].values())[0]
-            filters.append(getattr(ee.Filter, op)(key, val))
+    The following arguments are required--
 
-        return filters
+    "ee_dir": The GEE directory you want to pull images from. For example, to get Sentinel-2 L2A images,
+              input "COPERNICUS/S2_SR".
 
-    if 'filters_before' in sensor:
-        filters_before = _build_filters(sensor['filters_before'])
+    "ee_roi": A GEE Geometry Polygon object specifying the bounds of the image query.
 
-    if 'filters_after' in sensor:
-        filters_after = _build_filters(sensor['filters_after'])
+    "start_date": A string containing the first date of the date range you want your images to be from;
+                  e.g., "2020-10-30".
 
-    return filters_before, filters_after
+    "end_date": A string containing the last date of the date range you want your images to be from.
 
-def makeImageCollection(sensor, roi, start_date, end_date, modifiers=[], tile=None):
+    The following arguments are optional--
+
+    "filters_before": A list of ee.Filter objects you want to apply to the ImageCollection *before* the modifiers
+                      are applied. Default is None.
+    
+    "modifiers": A list of functions to map onto the ImageCollection using GEE's ".map()" method. Each function
+                 must have as its input and output only a single GEE Image object. All functions will be applied
+                 to all the Images in the ImageCollection. Defaults to an empty list.
+
+    "filters_after": A list of ee.Filter objects you want to apply to the ImageCollection *after* the modifiers
+                     are applied. Default is None.
+    '''
     ## Split into the original call/filters and the mapping
-    filters_before, filters_after = makeFilterList(sensor)
+    
     #print(modifiers)
 
-    collection = ee.ImageCollection(sensor['name']) \
+    collection = ee.ImageCollection(ee_dir) \
                 .filterDate(ee.Date(start_date), ee.Date(end_date)) \
-                .filterBounds(roi)
+                .filterBounds(ee_roi) \
+                .map( lambda x: clipToROI(x, ee.Geometry(ee_roi)) )
 
-    if tile is None:
-        #print('clipping in makeImageCollection')
-        ## If we're doing a feature collection
-        collection = collection.map( lambda x: clipToROI(x, ee.Geometry(roi)) )
-    else:
-        #print('not clipping in makeImageCollection')
-        ## If we're doing it by tile
-        collection = collection.filterMetadata(
-            'system:index', 'contains', tile
-        )
-    
     #print("size of collection:",collection.size().getInfo())
 
     if filters_before is not None:
         collection = collection.filter( filters_before )
-
-    if modifiers and len(modifiers) > 0:
-        for m in modifiers:
-            #print(f'Applying modifier {m}')
-            collection = collection.map(m)
+    
+    for m in modifiers:
+        #print(f'Applying modifier {m}')
+        collection = collection.map(m)
 
     if filters_after:
         collection = collection.filter( filters_after )
 
     return collection
-
-def process_datasource(source, sensor, export_folder, feature_list = None, pre_mosaic_sort='CLOUDY_PIXEL_PERCENTAGE'):
-#     feature_list = ee.FeatureCollection(source['features_src'])
-    feature_list = feature_list.sort(source['sort_by']).toList(feature_list.size())
-    n_features = feature_list.size().getInfo()
-
-    print("{} features have been loaded".format(n_features))
-
-    #task_list = []
-
-    exports = []
-
-    ### ERROR? ###
-    ## Originally this was range(1, n_features), but we're pretty sure
-    ## that should be 0 so we changed it.
-    for i in range(0, n_features):
-        polygon_id = i+1
-
-        feature_point = ee.Feature( feature_list.get(i) )
-
-        #if source['geometry'] == "point":
-        #    feature_point = feature_point.buffer(source['size']).bounds()
-
-        roi = feature_point.geometry()
-        roi = roi.coordinates().getInfo()
-
-        ### should be done outside the for loop ###
-        if isinstance(source['name'], str):
-            source['name'] = [source['name']]
-
-        ### ERROR? ###
-        ## The following conditional should be moved under
-        ## the conditional after it, or else we'll error out
-        ## if sensor doesn't have a "prefix" key.
-        if isinstance(sensor['prefix'], str):
-            sensor['prefix'] = [sensor['prefix']]
-
-        if 'prefix' in sensor:
-            filename_parts = sensor['prefix'] + source['name']
-        else:
-            filename_parts = source['name']
-        ### end of part that should be done outside the for loop ###
-
-        time_stamp = "_".join(time.ctime().split(" ")[1:])
-        filename = "_".join([str(i + 1)] + source['name'] + [time_stamp])
-        print("processing ",filename)
-        dest_path = "/".join(filename_parts + [filename])
-
-        export_params = {
-            'bucket': export_folder,
-            'resolution': source['resolution'],
-            'filename': filename,
-            'dest_path': dest_path
-        }
-
-        # task_params = {
-        #     'action': export_single_feature,
-        #     'id': "_".join(filename_parts + [str(i)]), # This must be unique per task, to allow to track retries
-        #     'kwargs': {
-        #         'roi': roi,
-        #         'export_params': export_params,
-        #         'sensor': sensor,
-        #         'date_range': {'start_date': source['start_date'], 'end_date': source['end_date'],
-        #         'sort_by': pre_mosaic_sort}
-        #     }
-        # }
-
-        # task_queue.add_task(task_params, blocking=True)
-
-        date_range = {
-            'start_date': source['start_date'],
-            'end_date': source['end_date'],
-            'original_date': '<preset date>',
-            'day_offset': '<preset date>',
-            'area': '<preset date>'
-        }
-
-        export = export_single_feature(
-            roi=roi,
-            sensor=sensor,
-            date_range=date_range,
-            export_params=export_params,
-            sort_by=pre_mosaic_sort,
-            polygon_id=polygon_id,
-            skip_test=True
-        )
-
-        exports.append(export)
-
-    return exports
 
 
 class Pipeline:
@@ -611,55 +515,55 @@ class Pipeline:
 
             self.export_try_except_loop(attempts=attempts)
 
-    def makeImageCollection(self,ee_roi):
-        '''
-        Makes a GEE ImageCollection object based off of an input GEE Geometry Polygon object, the date range
-        of the current polygon under consideration (based off of the Date Range List), and then applies
-        the necessary Cloudfree Merging functions to it. Filters are also applied based on the configuration file.
+    # def makeImageCollection(self,ee_roi):
+    #     '''
+    #     Makes a GEE ImageCollection object based off of an input GEE Geometry Polygon object, the date range
+    #     of the current polygon under consideration (based off of the Date Range List), and then applies
+    #     the necessary Cloudfree Merging functions to it. Filters are also applied based on the configuration file.
 
-        "ee_roi": A GEE Geometry Polygon object specifying the bounds of the image query.
+    #     "ee_roi": A GEE Geometry Polygon object specifying the bounds of the image query.
 
-        The following functions are applied to each image in the query:
-            inject_B10: If the images are from Sentinel-2 L2A, they lack the 'B10' band; this function finds the matching
-                        L1C image and gets its B10 band.
-            sentinel2CloudScore: Makes a cloud mask
-            calcCloudCoverage: Calculates the cloud coverage of the image based off of the cloud mask
-            sentinel2ProjectShadows: Makes a mask of cloud shadows
-            computeQualityScore: Computes the Quality Pixel Percentage score for the image
+    #     The following functions are applied to each image in the query:
+    #         inject_B10: If the images are from Sentinel-2 L2A, they lack the 'B10' band; this function finds the matching
+    #                     L1C image and gets its B10 band.
+    #         sentinel2CloudScore: Makes a cloud mask
+    #         calcCloudCoverage: Calculates the cloud coverage of the image based off of the cloud mask
+    #         sentinel2ProjectShadows: Makes a mask of cloud shadows
+    #         computeQualityScore: Computes the Quality Pixel Percentage score for the image
 
-        '''
-        ## Split into the original call/filters and the mapping
-        filters_before, filters_after = self._makeFilterList()
-        #print(modifiers)
+    #     '''
+    #     ## Split into the original call/filters and the mapping
+    #     filters_before, filters_after = self._makeFilterList()
+    #     #print(modifiers)
 
-        start_date = self.current_poly['date_range']['start_date']
-        end_date = self.current_poly['date_range']['end_date']
+    #     start_date = self.current_poly['date_range']['start_date']
+    #     end_date = self.current_poly['date_range']['end_date']
 
-        collection = ee.ImageCollection(self.sensor['name']) \
-                    .filterDate(ee.Date(start_date), ee.Date(end_date)) \
-                    .filterBounds(ee_roi) \
-                    .map( lambda x: clipToROI(x, ee.Geometry(ee_roi)) )
+    #     collection = ee.ImageCollection(self.sensor['name']) \
+    #                 .filterDate(ee.Date(start_date), ee.Date(end_date)) \
+    #                 .filterBounds(ee_roi) \
+    #                 .map( lambda x: clipToROI(x, ee.Geometry(ee_roi)) )
     
-        #print("size of collection:",collection.size().getInfo())
+    #     #print("size of collection:",collection.size().getInfo())
 
-        modifiers = []
-        if self.sensor['name'].lower() == "copernicus/s2_sr":
-            #print('Inject B10')
-            modifiers.append(inject_B10)
+    #     modifiers = []
+    #     if self.sensor['name'].lower() == "copernicus/s2_sr":
+    #         #print('Inject B10')
+    #         modifiers.append(inject_B10)
 
-        modifiers += [sentinel2CloudScore, calcCloudCoverage, sentinel2ProjectShadows, computeQualityScore]
+    #     modifiers += [sentinel2CloudScore, calcCloudCoverage, sentinel2ProjectShadows, computeQualityScore]
 
-        if filters_before is not None:
-            collection = collection.filter( filters_before )
+    #     if filters_before is not None:
+    #         collection = collection.filter( filters_before )
         
-        for m in modifiers:
-            #print(f'Applying modifier {m}')
-            collection = collection.map(m)
+    #     for m in modifiers:
+    #         #print(f'Applying modifier {m}')
+    #         collection = collection.map(m)
 
-        if filters_after:
-            collection = collection.filter( filters_after )
+    #     if filters_after:
+    #         collection = collection.filter( filters_after )
 
-        return collection
+    #     return collection
 
 
 
@@ -757,10 +661,28 @@ class Pipeline:
         '''
         Based off of the current polygon and its date range, queries for images, merges them, and exports
         the resulting cloud-free image.
-        '''
-        roi_ee = ee.Geometry.Polygon(self.current_poly['roi'])
 
-        imgC = self.makeImageCollection(roi_ee)
+        The following functions are applied to each image in the query:
+            inject_B10: If the images are from Sentinel-2 L2A, they lack the 'B10' band; this function finds the matching
+                        L1C image and gets its B10 band.
+            sentinel2CloudScore: Makes a cloud mask
+            calcCloudCoverage: Calculates the cloud coverage of the image based off of the cloud mask
+            sentinel2ProjectShadows: Makes a mask of cloud shadows
+            computeQualityScore: Computes the Quality Pixel Percentage score for the image
+        '''
+        modifiers = []
+        if self.sensor['name'].lower() == "copernicus/s2_sr":
+            #print('Inject B10')
+            modifiers.append(inject_B10)
+        modifiers += [sentinel2CloudScore, calcCloudCoverage, sentinel2ProjectShadows, computeQualityScore]
+
+        ee_dir = self.sensor['name']
+        roi_ee = ee.Geometry.Polygon(self.current_poly['roi'])
+        start_date = self.current_poly['date_range']['start_date']
+        end_date = self.current_poly['date_range']['end_date']
+        filters_before, filters_after = self._makeFilterList()
+
+        imgC = makeImageCollection(ee_dir, roi_ee, start_date, end_date, filters_before, modifiers, filters_after)
 
         #print(f'Size of polygon {polygon_id}: {imgC.size().getInfo()}')
         # print(imgC.size().getInfo())
