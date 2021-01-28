@@ -290,7 +290,7 @@ class Pipeline:
         '''
 
         stream = open(config_file, 'r') 
-        config_dict = yaml.load(stream)
+        config_dict = yaml.load(stream, Loader=yaml.SafeLoader)
         self.source = config_dict['data_list'][0]
         self.sensor = config_dict['sensors'][0]
         self.export_folder = config_dict['bucket']
