@@ -65,9 +65,11 @@ def makeImageCollection(ee_dir, ee_roi, start_date, end_date, filters_before=Non
     for m in modifiers:
         #print(f'Applying modifier {m}')
         collection = collection.map(m)
+        #print('new coll size:',collection.size().getInfo())
 
     if filters_after:
         collection = collection.filter( filters_after )
+        #print('final coll size:',collection.size().getInfo())
 
     return collection
 
@@ -81,13 +83,9 @@ class Pipeline:
     Arguments:
     "config_file": The location of your configuration file.
 
-    "polygons": You may choose to enter a GEE FeatureCollection object here that contains the Regions of Interest (ROI's)
-    you wish to export. If so, please also input a date_range_list.
-    If you don't use this argument, make sure to run the "import_aois" method. Default value is None.
+    "polygons": A GEE FeatureCollection object that contains the Regions of Interest (ROI's) you wish to export.
 
-    "date_range_list": If you enter polygons, you must also enter a date range list.
-    The date range list should be a list of dictionaries. There should be one dictionary per polygon in your "polygons" FeatureCollection.
-    If you don't use this argument, make sure to run the "import_aois" method. Default value is None.
+    "date_range_list": A list of dictionaries. There should be one dictionary per polygon in your "polygons" FeatureCollection.
     Each dictionary must contain at least the following two keys:
         "start_date": The first date to query images from for that polygon. This date should be a string in 'year-month-day' format.
             Examples: '2020-01-01'; '2019-11-30'
@@ -99,12 +97,12 @@ class Pipeline:
         "day_offset": To get your first date range while using Dynamic Date Range, take the original_date and expand forward and back
         by the number of days indicated by day_offset. For example, if the original_date is July 1 2020, and your day_offset is 30,
         then your start_date will be June 1 2020, and your end_date will be July 31 2020. This should be an integer.
-        When using Dynamic Date Range, we highly recommend either using the "import_aois" method, or deciding on your original_date
-        and day_offset first and generating the start_date and end_date from them.
+    When using Dynamic Date Range, we highly recommend deciding on your original_date
+    and day_offset first and generating the start_date and end_date from them.
 
     "dynamic_date_range": Boolean for whether to use the Dynamic Date Range feature. Default is False.
 
-    "offset_array": If 'dynamic_date_range' is set to True and 'polygons' are provided, then an offset_array must also be provided.
+    "offset_array": If 'dynamic_date_range' is set to True, then an offset_array must also be provided.
     This should be a list of integers. The smallest integer should be the smallest. day_offset used in the date_range_list. If an
     insufficient amount of images are found using that offset, the pipeline will then use the second-smallest integer as the new offset,
     and so on. Once the highest integer is reached, that will be used as the final date range.
@@ -119,10 +117,10 @@ class Pipeline:
 
     '''
 
-    def __init__(self, config_file, polygons=None, dynamic_date_range=False,
-                 date_range_list=None, offset_array=None, debug=False, 
+    def __init__(self, config_file, polygons, date_range_list, 
+                 dynamic_date_range=False, offset_array=None, debug=False, 
                  qual_img_thresh=5, qual_img_amount=5):
-        self.load_config(config_file)
+        self.config_file = config_file
         self.polygons = polygons
         self.dynamic_date_range = dynamic_date_range
         self.date_range_list = date_range_list
@@ -135,16 +133,15 @@ class Pipeline:
         self.qual_img_amount = qual_img_amount  
         
         
-        if self.polygons and self.date_range_list is None:
-            raise ValueError('If you input polygons, you must also input a date_range_list')
-        if self.date_range_list:
-            self._check_date_range_list()
+        # if self.polygons and self.date_range_list is None:
+        #     raise ValueError('If you input polygons, you must also input a date_range_list')
+        # if self.date_range_list:
+        #     self._check_date_range_list()
         if self.dynamic_date_range:
             if offset_array:
                 self.offset_dict = self._create_offset_dict(offset_array)
             else:
-                if self.polygons:
-                    raise ValueError('With dynamic date range, if you input polygons you must also input an offset_array')
+                raise ValueError('With dynamic date range, if you input polygons you must also input an offset_array')
 
         self._initialize_ee()
 
@@ -171,9 +168,9 @@ class Pipeline:
             raise ValueError(f'date_range_list is a {t}, but it must be a list')
 
         polygon_type = type(self.polygons)
-        if self.polygons is None:
-            raise ValueError('If you input a date_range_list, you must also input polygons')
-        elif type(polygon_type) is ee.featurecollection.FeatureCollection:
+        # if self.polygons is None:
+        #     raise ValueError('If you input a date_range_list, you must also input polygons')
+        if type(polygon_type) is ee.featurecollection.FeatureCollection:
             feature_list = self.polygons.toList(self.polygons.size())
             n_polygons = feature_list.size().getInfo()
         else:
@@ -282,7 +279,7 @@ class Pipeline:
         return filters_before, filters_after
 
 
-    def load_config(self, config_file):
+    def _load_config(self, config_file, source_num):
         '''
         Loads a configuration file
 
@@ -291,16 +288,18 @@ class Pipeline:
 
         stream = open(config_file, 'r') 
         config_dict = yaml.load(stream, Loader=yaml.SafeLoader)
-        self.source = config_dict['data_list'][0]
-        self.sensor = config_dict['sensors'][0]
+        self.source = config_dict['data_list'][source_num]
+        #self.sensor = config_dict['sensors'][0]
         self.export_folder = config_dict['bucket']
         return config_dict
 
 
-    def import_aois(self, csv_loc, Full_Congo_Pull=False, start_date=None,
+    def _import_aois(self, filename, Full_Congo_Pull=False, start_date=None,
                     end_date=None, days_duration=90, poly_start=0, poly_limit=None):
         '''
+        Full_Congo_Pull=True takes json
 
+        Full_Congo_Pull=False takes csv
         '''
         features = []
         polygons = []
@@ -308,7 +307,7 @@ class Pipeline:
         start_end_list = []
         
         if Full_Congo_Pull:
-            with open(csv_loc,"r",encoding='utf-8') as jsonfile:
+            with open(filename,"r",encoding='utf-8') as jsonfile:
                 data = json.load(jsonfile)
                 for feature_id, geometry in enumerate(data["features"], 1):
                     polygon = geometry["geometry"]["coordinates"][0][0]
@@ -331,6 +330,7 @@ class Pipeline:
                 start_end_list = [date_dict] * len(features)
                 fc = ee.FeatureCollection(features)
 
+                # To be modified for production use (e.g. monthly pulls) later
                 offset_dict = {
                     30: 360
                 }
@@ -344,9 +344,9 @@ class Pipeline:
             feature_id = poly_start
             
             if poly_limit:
-                df_labels = pd.read_csv(csv_loc, skiprows=range(1, poly_start+1), nrows=poly_limit)
+                df_labels = pd.read_csv(filename, skiprows=range(1, poly_start+1), nrows=poly_limit)
             else:
-                df_labels = pd.read_csv(csv_loc, skiprows=range(1, poly_start+1))
+                df_labels = pd.read_csv(filename, skiprows=range(1, poly_start+1))
 
             df_labels = df_labels[["center-lat","center-long","polygon","Labels combined","tile date","area (km2)"]]
             df_labels["tile date"] = pd.to_datetime(df_labels["tile date"])
@@ -377,6 +377,7 @@ class Pipeline:
 
             fc = ee.FeatureCollection(features)
 
+            # To be modified for production use (e.g. monthly pulls) later
             offset_dict = {
                 45: 90,
                 90: 180,
@@ -389,7 +390,28 @@ class Pipeline:
             return fc, start_end_list, offset_dict
 
 
-    def process_datasource_custom_daterange(
+    def run(self, source_nums=[0], loop_start=0, limit=None, minutes_to_wait=60, polygon_id_list=None):
+        '''
+        Runs process_datasource with each source in source_nums
+        '''
+        full_exports = []
+        full_exceptions = []
+        for source_num in source_nums:
+            config_dict = self._load_config(self.config_file, source_num)
+            for sensor_num in self.source['sensors']:
+                self.sensor = config_dict['sensors'][sensor_num]
+                print(f'Processing source {source_num} with sensor {sensor_num}')
+                exports, exceptions = self.process_datasource(
+                    loop_start=loop_start, limit=limit,
+                    minutes_to_wait=minutes_to_wait, polygon_id_list=polygon_id_list
+                )
+                full_exports.append(exports)
+                full_exceptions.append(exceptions)
+
+        return full_exports, full_exceptions
+
+
+    def process_datasource(
         self, loop_start=0, limit=None, minutes_to_wait=60, polygon_id_list=None
     ):
         '''
@@ -708,7 +730,6 @@ class Pipeline:
             return self.export_single_feature()
 
         else:
-
             cloudFree = cloudFree.clip(roi_ee).reproject('EPSG:4326', None, 10)
 
             ## make NDVI band
@@ -719,7 +740,7 @@ class Pipeline:
             self.export_params['roi'] = self.current_poly['roi']
             self.export_params['sensor_name'] = self.sensor['name'].lower()
             self.export_params['bands'] = self.sensor['bands']
-            
+
             return self.exportImageToGCS()
 
 
@@ -751,230 +772,10 @@ class Pipeline:
             fileNamePrefix=dest_path,
             bucket=bucket,
             maxPixels=1e13
-            )
+        )
         
 
         if start:
             export.start()
             
         return export
-
-
-
-
-
-
-#         def mergeCollection(imgC, keepThresh=5, filterBy='CLOUDY_PERCENTAGE',secondary_sort='CLOUDY_PIXEL_PERCENTAGE' ,filterType='less_than', mosaicBy='cloudShadowScore', polygon_id=None, date_range=None, test_coll=False):
-#             best = imgC.filterMetadata(filterBy, filterType, keepThresh)
-            
-#             if test_coll:
-#                 coll_is_good = collection_greater_than(best, 5)
-
-#                 if not coll_is_good:
-#                     return None
-            
-#             best_sorted = best.sort(secondary_sort, False).sort(filterBy, False)
-
-#             filtered = imgC.qualityMosaic(mosaicBy)
-
-#             newC = ee.ImageCollection.fromImages( [filtered, best_sorted.mosaic()] )
-
-#             return ee.Image(newC.mosaic())
-
-
-#         def exportImageToGCS(img=None, roi=None, bucket=None, filename=None, dest_path=None, resolution=10, start=True, sensor_name=None, bands=None):
-#             img = img.select(bands)
-
-#             export = ee.batch.Export.image.toCloudStorage(
-#                 image=img,
-#                 description=filename,
-#                 scale=resolution,
-#                 region=roi,
-#                 fileNamePrefix=dest_path,
-#                 bucket=bucket,
-#                 maxPixels=1e13
-#             )
-
-#             if start:
-#                 export.start()
-
-#             return export
-
-
-# def export_single_feature(offset_dict, roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PIXEL_PERCENTAGE', polygon_id=None, area_limit=1000, skip_test=True, tile=None):
-#     modifiers = []
-#     if sensor['name'].lower() == "copernicus/s2_sr":
-#         #print('Inject B10')
-#         modifiers.append(inject_B10)
-#     if sensor['type'].lower() == "opt":
-#         #print(sensor['type'])
-#         modifiers += [sentinel2CloudScore, calcCloudCoverage, sentinel2ProjectShadows, computeQualityScore]
-#         #print(modifiers)
-                    
-#     #print(f'Tile is {tile}')
-
-#     roi_ee = ee.Geometry.Polygon(roi)
-
-#     imgC = makeImageCollection(sensor, roi_ee, date_range['start_date'], date_range['end_date'], modifiers=modifiers, tile=tile)
-
-#     #print(f'Size of polygon {polygon_id}: {imgC.size().getInfo()}')
-#     # print(imgC.size().getInfo())
-#     # return None
-#     ## sort was not in the original version
-#     #image_collection = image_collection.sort(sort_by)
-#     ## below line was in the original verson;
-#     ## changing to the JS version
-#     ## img = image_collection.mosaic().clip(roi_ee)
-
-#     if skip_test is True:
-#         cloudFree = mergeCollection(imgC, polygon_id=polygon_id, date_range=date_range, test_coll=False)
-#     elif (date_range['day_offset'] == 'two years'): #or (date_range['area'] >= area_limit)
-#         # If we're pulling from two years, we'll end the dynamic date range loop and just have
-#         # this collection be the final one.
-#         cloudFree = mergeCollection(imgC, polygon_id=polygon_id, date_range=date_range, test_coll=False)
-#     else:
-#         cloudFree = mergeCollection(imgC, polygon_id=polygon_id, date_range=date_range, test_coll=True)
-#         # col1,col2 = mergeCollection(imgC, polygon_id=polygon_id, date_range=date_range, test_coll=True)
-#         # return col1,col2
-
-#     if cloudFree is None:
-#         original_date = date_range['original_date']
-#         area = date_range['area']
-#         day_offset = date_range['day_offset']
-
-#         # offset_dict = {
-#         #     45: 90,
-#         #     90: 180,
-#         #     180: 'two years'
-#         # }
-
-#         # offset_dict = {
-#         #     30: 'two years'
-#         # }
-
-#         new_offset = offset_dict[day_offset]
-
-#         if new_offset == 'two years':
-#             start_date = '2019-01-01'
-#             end_date = '2020-12-31'
-#         else:
-#             start = original_date + DateOffset(days=-day_offset)
-#             end = original_date + DateOffset(days=day_offset)
-#             start_date = str(start)[:10]
-#             end_date = str(end)[:10]
-
-#         # if tile is None:
-#         #     print(f'Polygon {polygon_id} is increasing offset to {new_offset}')
-#         # else:
-#         #     print(f'Tile {tile} is increasing offset to {new_offset}')
-
-#         new_date_range = {
-#             'start_date': start_date,
-#             'end_date': end_date,
-#             'original_date': original_date,
-#             'day_offset': new_offset,
-#             'area': area
-#         }
-
-#         return export_single_feature(
-#                     offset_dict=offset_dict,
-#                     roi=roi,
-#                     sensor=sensor,
-#                     date_range=new_date_range,
-#                     export_params=export_params,
-#                     sort_by=sort_by,
-#                     polygon_id=polygon_id,
-#                     tile=tile,
-#                     skip_test=False
-#                 )
-
-#     else:
-#         # if tile is None:
-#         #     print(f'Polygon {polygon_id} successfully merged with offset {date_range["day_offset"]}')
-#         # else:
-#         #     print(f'Tile {tile} successfully merged with offset {date_range["day_offset"]}')
-
-#         if tile is None:
-#             ## when doing a feature collection
-#             # print('clipping to ROI in export_single_feature')
-#             cloudFree = cloudFree.clip(roi_ee).reproject('EPSG:4326', None, 10)
-#         else:
-#             ## when doing tile by tile
-#             # print('not clipping in export_single_feature')
-#             cloudFree = cloudFree.reproject('EPSG:4326', None, 10)
-#         ## Do we need to mosaic it now???
-#         # print('cloudFree info:', cloudFree.getInfo())
-#         # print('Mosaic type:', type(img))
-
-#         ## make NDVI band
-#         ndvi = cloudFree.normalizedDifference(['B8', 'B4']).rename('NDVI')
-#         cloudFree = cloudFree.addBands(ndvi)
-#         cloudFree = cloudFree.float()
-
-#         new_params = export_params.copy()
-#         new_params['img'] = cloudFree
-#         new_params['roi'] = roi
-#         new_params['sensor_name'] = sensor['name'].lower()
-#         new_params['bands'] = sensor['bands']
-        
-#         return exportImageToGCS(**new_params)
-
-# def _serialise_task_log(task_log):
-#     for k,v in task_log.items():
-#         task_log[k]['task_def']['action'] = "export_single_feature"
-
-#     return task_log
-
-# def load_task_log(filename='task_log.json'):
-#     with open(filename, 'r') as f:
-#         task_log = json.load(f)
-
-#     for k, v in task_log.items():
-#         task_log[k]['task_def']['action'] = globals()[task_log[k]['task_def']['action']]
-
-#     return task_log
-
-# def monitor_tasks(task_log):
-#     print("SAVING LOG")
-#     f_raw = open('task_log.json', 'w')
-#     with FileObjectThread(f_raw, 'w') as handle:
-#         task_log = _serialise_task_log(task_log)
-#         json.dump(task_log, handle)
-
-#     f_raw.close()
-
-# # def load_config(path):
-# #     with open(path, 'r') as stream:
-# #         try:
-# #             return yaml.load(stream)
-# #         except yaml.YAMLError as exc:
-# #             print(exc)
-
-
-
-# if __name__ == "__main__":
-#     parser = ArgumentParser()
-#     parser.add_argument("-c", "--config", default=None, help="Config file for the download")
-#     args = parser.parse_args()
-
-#     assert args.config, "Please specify a config file for the download"
-#     config = load_config(args.config)
-#     print(config)
-
-#     ee.Initialize()
-
-#     task_queue = GEETaskManager(n_workers=config['max_tasks'], max_retry=config['max_retry'], wake_on_task=True, log_file=config['log_file'], process_timeout=config['task_timeout'])
-#     task_queue.register_monitor(monitor_tasks)
-
-#     if os.path.exists('task_log.json'):
-#         task_log = load_task_log(filename='task_log.json')
-#         task_queue.set_task_log(task_log)
-
-#     pre_mosaic_sort = config['pre_mosaic_sort']
-#     for data_list in config['data_list']:
-#         for sensor_idx in data_list['sensors']:
-#             sensor = config['sensors'][sensor_idx]
-#             tasks = process_datasource(task_queue, data_list, sensor, config['export_to'], config['export_dest'], pre_mosaic_sort)
-
-#     print("Waiting for completion...")
-#     task_queue.wait_till_done()
