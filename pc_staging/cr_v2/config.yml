@@ -1,0 +1,51 @@
+---
+
+downloadDirectory: "/Volumes/Lacie/zhenyadata/Project_Canopy_Data/PC_Data/Sentinel_Data/GEE/test_cloud_mask_v2/DL_test"
+export_to: bucket
+drive_folder: "cm_v2_testing"
+bucket: "project-canopy-temp-2"
+export_dest: "sentinel2"
+log_file: "gee_download_log.pkl"
+max_tasks: 5
+max_retry: 1
+task_timeout: 14400
+pre_mosaic_sort: 'CLOUDY_PERCENTAGE'
+
+sensors:
+  - name: "COPERNICUS/S2_SR"
+    prefix: "S2_CloudFree"
+    type: "opt"
+    bands: ['TCI_R', 'TCI_G', 'TCI_B']
+    filters_after:
+      - NON_QUALITY_PIXEL_PERCENTAGE: {'lte': 10}
+
+  - name: "COPERNICUS/S2_SR"
+    prefix: "S2_CloudFree"
+    type: "opt"
+    bands: ['B2','B3','B4','B8','B8A','TCI_R','TCI_G','TCI_B','NDVI']
+    filters_after:
+      - NON_QUALITY_PIXEL_PERCENTAGE: {'lte': 10}
+
+  - name: "COPERNICUS/S2"
+    type: "opt"
+    prefix: "S2_20_60_Cloud"
+    bands: ['B1','B2','B3','B4','B5','B6','B7','B8','B8A', 'B9','B10', 'B11','B12']
+    filters_after:
+      - NON_QUALITY_PIXEL_PERCENTAGE: {'gte': 20}
+      - NON_QUALITY_PIXEL_PERCENTAGE: {'lte': 60}
+
+
+data_list:
+  - name: ['testing_staging_pipeline']
+    start_date: '2019-01-01'
+    end_date: '2020-12-31'
+    resolution: 10
+    sort_by: 'id'
+    sensors: [1]
+
+  - name: ['winter','2017']
+    start_date: '2016-12-01'
+    end_date: '2020-01-01'
+    resolution: 10
+    sort_by: 'name'
+    sensors: [0,1,2]

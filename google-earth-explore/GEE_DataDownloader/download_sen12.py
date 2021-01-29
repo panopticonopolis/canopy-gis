@@ -14,7 +14,7 @@ from gevent.fileobject import FileObjectThread
 import logging
 
 
-LOG_FILENAME = 'full_basin_export_history.log'
+LOG_FILENAME = 'test_dynamic_date_range.log'
 logging.basicConfig(filename=LOG_FILENAME,level=logging.INFO)
 
 
@@ -167,7 +167,8 @@ def process_datasource(source, sensor, export_folder, feature_list = None, pre_m
 def process_datasource_custom_daterange(
 	source, sensor, export_folder, polygons, offset_dict,
 	date_range_list=[], pre_mosaic_sort='CLOUDY_PIXEL_PERCENTAGE',
-	area_limit=1000, loop_start=0, limit=None, minutes_to_wait=60, debug=False
+	area_limit=1000, loop_start=0, limit=None, minutes_to_wait=60, debug=False,
+	no_dynamic_daterage=False, full_range_export=False, polygon_id_list=None
 ):
 # 	feature_list = ee.FeatureCollection(source['features_src'])
 	if type(polygons) is dict:
@@ -206,7 +207,12 @@ def process_datasource_custom_daterange(
 	### ERROR? ###
 	## Originally this was range(1, n_features), but we're pretty sure
 	## that should be 0 so we changed it.
-	for i in range(loop_start, limit):
+	if polygon_id_list:
+		loop_values = [poly_id - 1 for poly_id in polygon_id_list]
+	else:
+		loop_values = range(loop_start, limit)
+
+	for i in loop_values:
 		polygon_id = i + 1
 
 		print(f'processing polygon {polygon_id} of {limit}', end='\r', flush=True)
@@ -224,6 +230,7 @@ def process_datasource_custom_daterange(
 		#	feature_point = feature_point.buffer(source['size']).bounds()
 
 		time_stamp = "_".join(time.ctime().split(" ")[1:])
+		time_stamp = time_stamp.replace(':', '_')
 		filename = "_".join([str(polygon_id)] + source['name'] + [time_stamp])
 		# print("processing ",filename)
 		dest_path = "/".join(filename_parts + [filename])
@@ -259,9 +266,10 @@ def process_datasource_custom_daterange(
 			'sort_by': pre_mosaic_sort,
 			'polygon_id': polygon_id,
 			'area_limit': area_limit,
-			'skip_test': False,
+			'skip_test': no_dynamic_daterage,
 			'tile': tile,
-			'offset_dict': offset_dict
+			'offset_dict': offset_dict,
+			'full_range_export': full_range_export
 		}
 
 		# export = export_single_feature(
@@ -303,7 +311,9 @@ def export_try_except_loop(params, minutes_to_wait, exports, exceptions, attempt
 
 		export_try_except_loop(params, minutes_to_wait, exports, exceptions, attempts)
 
-def export_single_feature(offset_dict, roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PIXEL_PERCENTAGE', polygon_id=None, area_limit=1000, skip_test=True, tile=None):
+def export_single_feature(offset_dict, roi=None, sensor=None, date_range=None, export_params=None, sort_by='CLOUDY_PIXEL_PERCENTAGE', polygon_id=None, area_limit=1000, skip_test=True, tile=None, full_range_export=False):
+	#logging.info(f'---POLYGON {polygon_id}---')
+
 	modifiers = []
 	if sensor['name'].lower() == "copernicus/s2_sr":
 		#print('Inject B10')
@@ -340,6 +350,28 @@ def export_single_feature(offset_dict, roi=None, sensor=None, date_range=None, e
 		# return col1,col2
 
 	if cloudFree is None:
+		if full_range_export:
+			new_export_params = export_params.copy()
+			day_offset = date_range['day_offset']
+			name_mod = f'_offset_{day_offset}'
+			new_filename = export_params['filename'] + name_mod
+			new_dest = export_params['dest_path'] + name_mod
+			new_export_params['filename'] = new_filename
+			new_export_params['dest_path'] = new_dest
+
+			export = export_single_feature(
+						offset_dict=offset_dict,
+						roi=roi,
+						sensor=sensor,
+						date_range=date_range,
+						export_params=new_export_params,
+						sort_by=sort_by,
+						polygon_id=polygon_id,
+						tile=tile,
+						skip_test=True,
+						full_range_export=False
+					)
+
 		original_date = date_range['original_date']
 		area = date_range['area']
 		day_offset = date_range['day_offset']
@@ -355,6 +387,8 @@ def export_single_feature(offset_dict, roi=None, sensor=None, date_range=None, e
 		# }
 
 		new_offset = offset_dict[day_offset]
+
+		#logging.info(f'Offset increased from {day_offset} to {new_offset}')
 
 		if new_offset == 'two years':
 			start_date = '2019-01-01'
@@ -387,10 +421,15 @@ def export_single_feature(offset_dict, roi=None, sensor=None, date_range=None, e
 					sort_by=sort_by,
 					polygon_id=polygon_id,
 					tile=tile,
-					skip_test=False
+					skip_test=False,
+					full_range_export=full_range_export
 				)
 
 	else:
+		#logging.info(f'Polygon {polygon_id} successfully merged with offset {date_range["day_offset"]}')
+		#logging.info('')
+		#logging.info('')
+		#return None
 		# if tile is None:
 		# 	print(f'Polygon {polygon_id} successfully merged with offset {date_range["day_offset"]}')
 		# else:
