@@ -41,7 +41,7 @@ data_list:
     end_date: '2020-12-31'
     resolution: 10
     sort_by: 'id'
-    sensors: [0]
+    sensors: [1]
 
   - name: ['winter','2017']
     start_date: '2016-12-01'

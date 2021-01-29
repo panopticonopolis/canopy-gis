@@ -125,14 +125,13 @@ class Pipeline:
         self.dynamic_date_range = dynamic_date_range
         self.date_range_list = date_range_list
         self.debug = debug
-
-        self._minutes_to_wait = 60
-        self.exports = []
-        self.exceptions = []
         self.qual_img_thresh = qual_img_thresh
         self.qual_img_amount = qual_img_amount  
-        
-        
+
+        self.exports = []
+        self.exceptions = []
+        self._minutes_to_wait = 60
+
         # if self.polygons and self.date_range_list is None:
         #     raise ValueError('If you input polygons, you must also input a date_range_list')
         # if self.date_range_list:
@@ -390,7 +389,7 @@ class Pipeline:
             return fc, start_end_list, offset_dict
 
 
-    def run(self, source_nums=[0], loop_start=0, limit=None, minutes_to_wait=60, polygon_id_list=None):
+    def run(self, source_nums=[0], loop_start=0, limit=None, polygon_id_list=None):
         '''
         Runs process_datasource with each source in source_nums
         '''
@@ -402,8 +401,7 @@ class Pipeline:
                 self.sensor = config_dict['sensors'][sensor_num]
                 print(f'Processing source {source_num} with sensor {sensor_num}')
                 exports, exceptions = self.process_datasource(
-                    loop_start=loop_start, limit=limit,
-                    minutes_to_wait=minutes_to_wait, polygon_id_list=polygon_id_list
+                    loop_start=loop_start, limit=limit, polygon_id_list=polygon_id_list
                 )
                 full_exports.append(exports)
                 full_exceptions.append(exceptions)
@@ -412,7 +410,7 @@ class Pipeline:
 
 
     def process_datasource(
-        self, loop_start=0, limit=None, minutes_to_wait=60, polygon_id_list=None
+        self, loop_start=0, limit=None, polygon_id_list=None
     ):
         '''
         Applies Cloudfree Merging to the polygons in the GEE FeatureCollection and exports them one at a time.
