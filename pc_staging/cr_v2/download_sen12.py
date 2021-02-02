@@ -482,6 +482,7 @@ class Pipeline:
                 # tile = None
 
                 time_stamp = "_".join(time.ctime().split(" ")[1:])
+                time_stamp = time_stamp.replace(':', '_')
                 filename = "_".join([str(polygon_id)] + self.source['name'] + [time_stamp])
                 dest_path = "/".join(filename_parts + [filename])
 
