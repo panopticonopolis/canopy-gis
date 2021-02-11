@@ -331,7 +331,8 @@ class Pipeline:
 
                 # To be modified for production use (e.g. monthly pulls) later
                 offset_dict = {
-                    30: 360
+                    30: 360,
+                    360: 720
                 }
                 
                 self.polygons = fc
@@ -380,7 +381,8 @@ class Pipeline:
             offset_dict = {
                 45: 90,
                 90: 180,
-                180: 360
+                180: 360,
+                360: 720
             }
                 
             self.polygons = fc
@@ -389,10 +391,11 @@ class Pipeline:
             return fc, start_end_list, offset_dict
 
 
-    def run(self, source_nums=[0], loop_start=0, limit=None, polygon_id_list=None):
+    def run(self, source_nums=[0], loop_start=0, limit=None, polygon_id_list=None, add_ndvi=False):
         '''
         Runs process_datasource with each source in source_nums
         '''
+        self.add_ndvi = add_ndvi
         full_exports = []
         full_exceptions = []
         for source_num in source_nums:
@@ -474,44 +477,53 @@ class Pipeline:
             print(f'Processing polygon {polygon_id} of {limit}', end='\r', flush=True)
 
             feature = ee.Feature( feature_list.get(i) )
-            if self._get_feature_area(feature) > 1000:
-                print(f'Polygon {polygon_id} has area greater than 1000; skipping')
+            # if self._get_feature_area(feature) > 1000:
+            #     print(f'Polygon {polygon_id} has area greater than 1000; skipping')
+            # if self._get_feature_area(feature) > 2000:
+            #     area_too_big = True
+            # else:
+            #     area_too_big = False
+            # else:
+            roi = feature.geometry()
+            roi = roi.coordinates().getInfo()[0]
+            # tile = None
+
+            time_stamp = "_".join(time.ctime().split(" ")[1:])
+            time_stamp = time_stamp.replace(':', '_')
+            filename = "_".join([str(polygon_id)] + self.source['name'] + [time_stamp])
+            dest_path = "/".join(filename_parts + [filename])
+
+            self.export_params = {
+                'bucket': self.export_folder,
+                'resolution': self.source['resolution'],
+                'filename': filename,
+                'dest_path': dest_path
+            }
+
+            date_range = self.date_range_list[i]
+
+            self.current_poly = {
+                'date_range': date_range,
+                'polygon_id': polygon_id,
+                'roi': roi
+            }
+
+
+            if self.dynamic_date_range is False:
+                self.skip_test_check = True
             else:
-                roi = feature.geometry()
-                roi = roi.coordinates().getInfo()[0]
-                # tile = None
+                # if polygon_id == 81:
+                #     self.current_poly['date_range']['start_date'] == '2017-01-01'
+                #     self.current_poly['date_range']['end_date'] == '2021-12-31'
+                #     self.skip_test_check = True
+                # else:
+                self.skip_test_check = False
+                    
+            self._export_try_except_loop(attempts=0)
 
-                time_stamp = "_".join(time.ctime().split(" ")[1:])
-                time_stamp = time_stamp.replace(':', '_')
-                filename = "_".join([str(polygon_id)] + self.source['name'] + [time_stamp])
-                dest_path = "/".join(filename_parts + [filename])
-
-                self.export_params = {
-                    'bucket': self.export_folder,
-                    'resolution': self.source['resolution'],
-                    'filename': filename,
-                    'dest_path': dest_path
-                }
-
-                date_range = self.date_range_list[i]
-
-                self.current_poly = {
-                    'date_range': date_range,
-                    'polygon_id': polygon_id,
-                    'roi': roi
-                }
-
-
-                if self.dynamic_date_range is False:
-                    self.skip_test_check = True
-                else:
-                    self.skip_test_check = False
-                        
-                self._export_try_except_loop(attempts=0)
-
-                if self.debug:
-                    logging_timestamp = "_".join(time.ctime().split(" ")[1:])
-                    logging.info(f'{logging_timestamp}: Polygon {polygon_id} successfully processed')
+            if self.debug:
+                logging_timestamp = "_".join(time.ctime().split(" ")[1:])
+                logging.info(f'{logging_timestamp}: Polygon {polygon_id} successfully processed')
 
         return self.exports, self.exceptions
 
@@ -534,7 +546,7 @@ class Pipeline:
             # wait 60 minutes
             time.sleep(60 * self._minutes_to_wait)
 
-            self.export_try_except_loop(attempts=attempts)
+            self._export_try_except_loop(attempts=attempts)
 
     # def makeImageCollection(self,ee_roi):
     #     '''
@@ -732,7 +744,10 @@ class Pipeline:
             cloudFree = cloudFree.clip(roi_ee).reproject('EPSG:4326', None, 10)
 
             ## make NDVI band
-            cloudFree = self._add_ndvi_band(img=cloudFree)
+            if self.add_ndvi:
+                cloudFree = self._add_ndvi_band(img=cloudFree)
+            else:
+                cloudFree = cloudFree.toUint16()
 
 
             self.export_params['img'] = cloudFree
